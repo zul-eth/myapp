@@ -9,19 +9,40 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@okxweb3/coin-base": "^1.1.5",
+    "@okxweb3/coin-ethereum": "^1.1.2",
+    "@okxweb3/coin-solana": "^1.1.0",
+    "@okxweb3/coin-tron": "^1.1.0",
+    "@okxweb3/crypto-lib": "^1.0.12",
+    "@prisma/client": "^6.12.0",
+    "bip39": "^3.1.0",
+    "next": "15.4.4",
+    "prisma": "^6.12.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.4.4"
+    "ts-node": "^10.9.2",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/bip39": "^2.4.2",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
+    "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "15.4.4",
-    "@eslint/eslintrc": "^3"
+    "jest": "^30.0.5",
+    "node-mocks-http": "^1.17.2",
+    "postcss": "^8.5.6",
+    "supertest": "^7.1.4",
+    "tailwindcss": "^4.1.11",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

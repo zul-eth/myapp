@@ -1,36 +1,60 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
+# Roadmap
+- API logic  (CRUD & relasi) ✅
+- Unit/Integration Testing ✅
+- Integrasi UI/UX
+- Auth & middleware
+- Deployment
+- Monitoring
+- Webhook/Notifikasi
 
-First, run the development server:
+flowchart TD status
+    PENDING -->|Pembayaran diterima| PAID
+    PAID -->|Verifikasi berhasil| PROCESSING
+    PROCESSING -->|Transaksi selesai| COMPLETED
+    PROCESSING -->|Gagal kirim| FAILED
+    PENDING -->|Timeout / dibatalkan admin| CANCELLED
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Daftar API RESTful
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Entity Method Endpoint Fungsi
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Coin 
+- GET /api/coins List semua coin aktif
+- POST /api/coins Tambah coin baru
+- PUT /api/coins/:id Update nama/symbol/logo/isActive coin
+- DELETE /api/coins/:id Hapus coin
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Network 
+- GET /api/networks List semua network aktif
+- POST /api/networks Tambah network baru
+- PUT /api/networks/:id Update nama/logo/isActive network
+- DELETE /api/networks/:id Hapus network
 
-## Learn More
+# CoinNetwork 
+- GET api/coin-network Lihat semua coin-network relasi
+- POST api/coin-network Hubungkan coin ↔ network
+- PUT api/coin-network/:id Aktif/nonaktifkan koneksi
+- DELETE api/coin-network/:id Hapus relasi coin ↔ network
 
-To learn more about Next.js, take a look at the following resources:
+# PaymentOption
+- GET /api/payment-options List kombinasi coin + network aktif untuk pembayaran
+- POST /api/payment-options Tambah kombinasi payment baru
+- PUT /api/payment-options/:id Update status aktif/tidaknya metode pembayaran
+- DELETE /api/payment-options/:id Hapus metode pembayaran
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Order
+- GET /api/orders/:id Lihat detail order tertentu
+- POST /api/order Buat order baru
+- PUT /api/orders/:id/status Update status (misalnya: CONFIRMED, COMPLETED)
+- GET /api/orders List semua order (opsional untuk admin)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# WalletPool
+- GET /api/wallet-pool List semua wallet
+- POST /api/wallet-pool Tambah wallet baru
+- PUT /api/wallet-pool/:id Tandai sebagai used/un-used
+- DELETE /api/wallet-pool/:id Hapus wallet dari pool
 
-## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

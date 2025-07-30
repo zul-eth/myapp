@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Coin {
+  id       String        @id @default(uuid())
+  symbol   String        @unique
+  name     String
+  logoUrl  String?
+  isActive Boolean       @default(true)
+  networks CoinNetwork[]
+
+  paymentOptions PaymentOption[]
+  walletPools    WalletPool[]
+  ordersToBuy    Order[]         @relation("BuyCoin")
+  ordersToPay    Order[]         @relation("PayCoin")
+  
+  buyRates ExchangeRate[] @relation("BuyRateCoin")
+  payRates ExchangeRate[] @relation("PayRateCoin")
+
+  createdAt DateTime @default(now())
+}
+
+model Network {
+  id       String        @id @default(uuid())
+  name     String        @unique
+  logoUrl  String?
+  isActive Boolean       @default(true)
+  coins    CoinNetwork[]
+
+  paymentOptions PaymentOption[]
+  walletPools    WalletPool[]
+  buyOrders      Order[]         @relation("BuyNetwork")
+  payOrders      Order[]         @relation("PayNetwork")
+  
+  buyRates ExchangeRate[] @relation("BuyRateNetwork")
+  payRates ExchangeRate[] @relation("PayRateNetwork")
+
+  createdAt DateTime @default(now())
+}
+
+model CoinNetwork {
+  id        String @id @default(uuid())
+  coinId    String
+  networkId String
+
+  coin    Coin    @relation(fields: [coinId], references: [id])
+  network Network @relation(fields: [networkId], references: [id])
+  
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([coinId, networkId])
+  
+}
+
+model PaymentOption {
+  id        String @id @default(uuid())
+  coinId    String
+  networkId String
+
+  coin    Coin    @relation(fields: [coinId], references: [id])
+  network Network @relation(fields: [networkId], references: [id])
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([coinId, networkId])
+}
+
+model WalletPool {
+  id        String @id @default(uuid())
+  coinId    String
+  networkId String
+
+  coin    Coin    @relation(fields: [coinId], references: [id])
+  network Network @relation(fields: [networkId], references: [id])
+
+  address       String   @unique
+  xpub          String?
+  isUsed        Boolean  @default(false)
+  assignedOrder String?
+  createdAt     DateTime @default(now())
+
+  @@unique([coinId, networkId, address])
+}
+
+model Order {
+  id String @id @default(cuid())
+
+  // Coin & network yang dibeli (tujuan)
+  coinToBuyId  String
+  buyNetworkId String
+  coinToBuy    Coin    @relation("BuyCoin", fields: [coinToBuyId], references: [id])
+  buyNetwork   Network @relation("BuyNetwork", fields: [buyNetworkId], references: [id])
+
+  // Coin & network untuk pembayaran
+  payWithId    String
+  payNetworkId String
+  payWith      Coin    @relation("PayCoin", fields: [payWithId], references: [id])
+  payNetwork   Network @relation("PayNetwork", fields: [payNetworkId], references: [id])
+
+  amount    Float
+  receivedAmount Float? @default(0)
+  priceRate Float
+
+  receivingAddr String
+  paymentAddr   String
+  paymentMemo   String?
+
+  txHash        String?
+  confirmations Int         @default(0)
+  status        OrderStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime? 
+}
+
+model ExchangeRate {
+  id            String   @id @default(uuid())
+
+  buyCoinId     String
+  buyNetworkId  String
+  payCoinId     String
+  payNetworkId  String
+
+  buyCoin       Coin     @relation("BuyRateCoin", fields: [buyCoinId], references: [id])
+  buyNetwork    Network  @relation("BuyRateNetwork", fields: [buyNetworkId], references: [id])
+  payCoin       Coin     @relation("PayRateCoin", fields: [payCoinId], references: [id])
+  payNetwork    Network  @relation("PayRateNetwork", fields: [payNetworkId], references: [id])
+
+  rate          Float
+  updatedBy     String?       // bisa email/nama admin yang mengubah
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([buyCoinId, buyNetworkId, payCoinId, payNetworkId])
+}
+
+enum OrderStatus {
+  PENDING                // Order baru dibuat
+  WAITING_PAYMENT        // Menunggu pembayaran (belum ada pembayaran)
+  UNDERPAID              // Sudah ada pembayaran, tapi kurang dari total
+  WAITING_CONFIRMATION   // Pembayaran diterima, menunggu konfirmasi jaringan
+  CONFIRMED              // Pembayaran terkonfirmasi penuh
+  COMPLETED              // Order berhasil dan selesai
+  EXPIRED                // Melewati batas waktu, tidak dibayar atau masih kurang
+  FAILED                 // Order gagal karena alasan lain
+}
