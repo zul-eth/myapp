@@ -37,165 +37,183 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.POST = exports.GET = void 0;
-// src/app/api/orders/route.ts
+// List + Create Orders
 var client_1 = require("@prisma/client");
 var server_1 = require("next/server");
+var chainMap_1 = require("@/lib/hdwallet/chainMap");
 var universal_1 = require("@/lib/hdwallet/universal");
 var prisma = new client_1.PrismaClient();
-function mapNetworkToChains(networkName) {
-    var n = networkName.trim().toLowerCase();
+var PAYMENT_WINDOW_MINUTES = 15;
+function mapNetworkToDbChain(networkName) {
+    var n = (networkName || '').trim().toLowerCase();
     if (n.includes('tron') || n === 'trx')
-        return { dbChain: 'tron', runtimeChain: 'tron' };
+        return 'tron';
     if (n.includes('solana') || n === 'sol')
-        return { dbChain: 'solana', runtimeChain: 'solana' };
-    return { dbChain: 'evm', runtimeChain: 'eth' };
+        return 'solana';
+    return 'evm';
 }
+// GET /api/orders
 function GET(req) {
-    var _a;
     return __awaiter(this, void 0, void 0, function () {
-        var searchParams, status, q, limit, where, orders, error_1;
+        var searchParams, q, status, page, limit, skip, where, _a, total, data, e_1;
         return __generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
                     _b.trys.push([0, 2, , 3]);
                     searchParams = new URL(req.url).searchParams;
-                    status = searchParams.get('status');
-                    q = (_a = searchParams.get('q')) !== null && _a !== void 0 ? _a : undefined;
-                    limit = Math.min(Number(searchParams.get('limit') || 50), 200);
-                    where = {};
-                    if (status && status in client_1.OrderStatus)
-                        where.status = status;
-                    if (q)
-                        where.id = { contains: q, mode: 'insensitive' };
-                    return [4 /*yield*/, prisma.order.findMany({
-                            where: where,
-                            orderBy: { createdAt: 'desc' },
-                            take: limit,
-                            include: {
-                                coinToBuy: true,
-                                buyNetwork: true,
-                                payWith: true,
-                                payNetwork: true,
-                            },
-                        })];
+                    q = searchParams.get('q') || '';
+                    status = (searchParams.get('status') || '');
+                    page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+                    limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20', 10)));
+                    skip = (page - 1) * limit;
+                    where = {
+                        AND: [
+                            status ? { status: status } : {},
+                            q
+                                ? {
+                                    OR: [
+                                        { id: { contains: q, mode: 'insensitive' } },
+                                        { receivingAddr: { contains: q, mode: 'insensitive' } },
+                                        { paymentAddr: { contains: q, mode: 'insensitive' } },
+                                        { txHash: { contains: q, mode: 'insensitive' } },
+                                    ],
+                                }
+                                : {},
+                        ],
+                    };
+                    return [4 /*yield*/, Promise.all([
+                            prisma.order.count({ where: where }),
+                            prisma.order.findMany({
+                                where: where,
+                                orderBy: { createdAt: 'desc' },
+                                skip: skip,
+                                take: limit,
+                                include: { coinToBuy: true, buyNetwork: true, payWith: true, payNetwork: true },
+                            }),
+                        ])];
                 case 1:
-                    orders = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(orders)];
+                    _a = _b.sent(), total = _a[0], data = _a[1];
+                    return [2 /*return*/, server_1.NextResponse.json({ message: 'OK', data: data, page: page, limit: limit, total: total })];
                 case 2:
-                    error_1 = _b.sent();
-                    console.error('GET /api/orders error:', error_1);
-                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Internal server error' }, { status: 500 })];
+                    e_1 = _b.sent();
+                    console.error('GET /api/orders error:', e_1);
+                    return [2 /*return*/, server_1.NextResponse.json({ message: (e_1 === null || e_1 === void 0 ? void 0 : e_1.message) || 'Internal server error' }, { status: 500 })];
                 case 3: return [2 /*return*/];
             }
         });
     });
 }
 exports.GET = GET;
+// POST /api/orders
 function POST(req) {
     return __awaiter(this, void 0, void 0, function () {
-        var body, _a, coinToBuyId_1, buyNetworkId_1, payWithId_1, payNetworkId_1, amount_1, receivingAddr_1, mnemonic_1, createdOrderId, order, error_2;
-        var _this = this;
+        var body, _a, coinToBuyId, buyNetworkId, payWithId, payNetworkId, amount, receivingAddr, payNet, dbChain, runtimeChain, rateRow, wallet, MNEMONIC, cursor, index, address, expiresAt, order, e_2;
         return __generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
-                    _b.trys.push([0, 4, , 5]);
+                    _b.trys.push([0, 12, , 13]);
                     return [4 /*yield*/, req.json()];
                 case 1:
                     body = _b.sent();
-                    _a = body || {}, coinToBuyId_1 = _a.coinToBuyId, buyNetworkId_1 = _a.buyNetworkId, payWithId_1 = _a.payWithId, payNetworkId_1 = _a.payNetworkId, amount_1 = _a.amount, receivingAddr_1 = _a.receivingAddr;
-                    if (!coinToBuyId_1 || !buyNetworkId_1 || !payWithId_1 || !payNetworkId_1 || !amount_1 || !receivingAddr_1) {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Field wajib belum lengkap' }, { status: 400 })];
+                    _a = body || {}, coinToBuyId = _a.coinToBuyId, buyNetworkId = _a.buyNetworkId, payWithId = _a.payWithId, payNetworkId = _a.payNetworkId, amount = _a.amount, receivingAddr = _a.receivingAddr;
+                    if (!coinToBuyId || !buyNetworkId || !payWithId || !payNetworkId || !amount || !receivingAddr) {
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Data tidak lengkap' }, { status: 400 })];
                     }
-                    mnemonic_1 = process.env.MNEMONIC;
-                    if (!mnemonic_1)
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'MNEMONIC belum dikonfigurasi' }, { status: 500 })];
-                    return [4 /*yield*/, prisma.$transaction(function (tx) { return __awaiter(_this, void 0, void 0, function () {
-                            var _a, payNetwork, rateEntry, created, _b, dbChain, runtimeChain, cur, indexAssigned, address;
-                            return __generator(this, function (_c) {
-                                switch (_c.label) {
-                                    case 0: return [4 /*yield*/, Promise.all([
-                                            tx.network.findUnique({ where: { id: payNetworkId_1 } }),
-                                            tx.exchangeRate.findFirst({
-                                                where: { buyCoinId: coinToBuyId_1, buyNetworkId: buyNetworkId_1, payCoinId: payWithId_1, payNetworkId: payNetworkId_1 },
-                                                select: { rate: true },
-                                            }),
-                                        ])];
-                                    case 1:
-                                        _a = _c.sent(), payNetwork = _a[0], rateEntry = _a[1];
-                                        if (!payNetwork)
-                                            throw new Error('Network pembayaran tidak ditemukan');
-                                        if (!rateEntry || !Number.isFinite(Number(rateEntry.rate)) || Number(rateEntry.rate) <= 0) {
-                                            throw new Error('Rate tidak ditemukan/invalid untuk pasangan ini');
-                                        }
-                                        return [4 /*yield*/, tx.order.create({
-                                                data: {
-                                                    coinToBuyId: coinToBuyId_1,
-                                                    buyNetworkId: buyNetworkId_1,
-                                                    payWithId: payWithId_1,
-                                                    payNetworkId: payNetworkId_1,
-                                                    amount: Number(amount_1),
-                                                    priceRate: Number(rateEntry.rate),
-                                                    receivingAddr: receivingAddr_1,
-                                                    status: 'WAITING_PAYMENT',
-                                                },
-                                                select: { id: true },
-                                            })];
-                                    case 2:
-                                        created = _c.sent();
-                                        _b = mapNetworkToChains(payNetwork.name), dbChain = _b.dbChain, runtimeChain = _b.runtimeChain;
-                                        return [4 /*yield*/, tx.hdCursor.upsert({
-                                                where: { chain: dbChain },
-                                                update: { nextIndex: { increment: 1 } },
-                                                create: { chain: dbChain, nextIndex: 1 },
-                                            })];
-                                    case 3:
-                                        cur = _c.sent();
-                                        indexAssigned = cur.nextIndex - 1;
-                                        return [4 /*yield*/, (0, universal_1.generateAddress)(runtimeChain, mnemonic_1, indexAssigned)];
-                                    case 4:
-                                        address = _c.sent();
-                                        if (!address || typeof address !== 'string')
-                                            throw new Error('Gagal generate address');
-                                        return [4 /*yield*/, tx.walletPoolLegacy.create({
-                                                data: {
-                                                    chain: dbChain,
-                                                    derivationIndex: indexAssigned,
-                                                    address: address,
-                                                    isUsed: true,
-                                                    assignedOrder: created.id,
-                                                },
-                                            })];
-                                    case 5:
-                                        _c.sent();
-                                        return [4 /*yield*/, tx.order.update({
-                                                where: { id: created.id },
-                                                data: { paymentAddr: address },
-                                            })];
-                                    case 6:
-                                        _c.sent();
-                                        return [2 /*return*/, { createdOrderId: created.id }];
-                                }
-                            });
-                        }); })];
+                    return [4 /*yield*/, prisma.network.findUnique({ where: { id: payNetworkId } })];
                 case 2:
-                    createdOrderId = (_b.sent()).createdOrderId;
-                    return [4 /*yield*/, prisma.order.findUnique({
-                            where: { id: createdOrderId },
-                            include: {
-                                coinToBuy: true,
-                                buyNetwork: true,
-                                payWith: true,
-                                payNetwork: true,
+                    payNet = _b.sent();
+                    if (!payNet)
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Network pembayaran tidak ditemukan' }, { status: 404 })];
+                    dbChain = mapNetworkToDbChain(payNet.name);
+                    runtimeChain = (0, chainMap_1.dbToRuntimeChain)(dbChain);
+                    return [4 /*yield*/, prisma.exchangeRate.findFirst({
+                            where: {
+                                buyCoinId: coinToBuyId,
+                                buyNetworkId: buyNetworkId,
+                                payCoinId: payWithId,
+                                payNetworkId: payNetworkId,
                             },
                         })];
                 case 3:
-                    order = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Order created', order: order })];
+                    rateRow = _b.sent();
+                    if (!rateRow)
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Rate tidak ditemukan' }, { status: 404 })];
+                    return [4 /*yield*/, prisma.walletPoolLegacy.findFirst({
+                            where: { chain: dbChain, isUsed: false },
+                            orderBy: { derivationIndex: 'asc' },
+                        })];
                 case 4:
-                    error_2 = _b.sent();
-                    console.error('POST /api/orders error:', error_2);
-                    return [2 /*return*/, server_1.NextResponse.json({ message: (error_2 === null || error_2 === void 0 ? void 0 : error_2.message) || 'Internal server error' }, { status: 500 })];
-                case 5: return [2 /*return*/];
+                    wallet = _b.sent();
+                    if (!!wallet) return [3 /*break*/, 9];
+                    MNEMONIC = process.env.MNEMONIC;
+                    if (!MNEMONIC)
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'MNEMONIC belum diset' }, { status: 500 })];
+                    return [4 /*yield*/, prisma.hdCursor.upsert({
+                            where: { chain: dbChain },
+                            update: {},
+                            create: { chain: dbChain, nextIndex: 0 },
+                        })];
+                case 5:
+                    cursor = _b.sent();
+                    index = cursor.nextIndex;
+                    return [4 /*yield*/, (0, universal_1.generateAddress)(runtimeChain, MNEMONIC, index)];
+                case 6:
+                    address = _b.sent();
+                    return [4 /*yield*/, prisma.walletPoolLegacy.create({
+                            data: {
+                                chain: dbChain,
+                                derivationIndex: index,
+                                address: address,
+                                isUsed: false,
+                            },
+                        })];
+                case 7:
+                    wallet = _b.sent();
+                    // advance cursor
+                    return [4 /*yield*/, prisma.hdCursor.update({
+                            where: { chain: dbChain },
+                            data: { nextIndex: { increment: 1 } },
+                        })];
+                case 8:
+                    // advance cursor
+                    _b.sent();
+                    _b.label = 9;
+                case 9:
+                    expiresAt = new Date(Date.now() + PAYMENT_WINDOW_MINUTES * 60 * 1000);
+                    return [4 /*yield*/, prisma.order.create({
+                            data: {
+                                coinToBuyId: coinToBuyId,
+                                buyNetworkId: buyNetworkId,
+                                payWithId: payWithId,
+                                payNetworkId: payNetworkId,
+                                amount: amount,
+                                priceRate: rateRow.rate,
+                                receivingAddr: receivingAddr,
+                                paymentAddr: wallet.address,
+                                paymentMemo: null,
+                                txHash: null,
+                                confirmations: 0,
+                                status: 'PENDING',
+                                expiresAt: expiresAt,
+                            },
+                            include: { coinToBuy: true, buyNetwork: true, payWith: true, payNetwork: true },
+                        })];
+                case 10:
+                    order = _b.sent();
+                    // tandai wallet sudah dipakai & assign ke order
+                    return [4 /*yield*/, prisma.walletPoolLegacy.update({
+                            where: { id: wallet.id },
+                            data: { isUsed: true, assignedOrder: order.id },
+                        })];
+                case 11:
+                    // tandai wallet sudah dipakai & assign ke order
+                    _b.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Order created', data: order }, { status: 201 })];
+                case 12:
+                    e_2 = _b.sent();
+                    console.error('POST /api/orders error:', e_2);
+                    return [2 /*return*/, server_1.NextResponse.json({ message: (e_2 === null || e_2 === void 0 ? void 0 : e_2.message) || 'Internal server error' }, { status: 500 })];
+                case 13: return [2 /*return*/];
             }
         });
     });

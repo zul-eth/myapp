@@ -2,147 +2,146 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { OrderStatus } from '@prisma/client';
-import { listOrders } from '@/lib/api/orders';
+import { getOrder } from '@/lib/api/orders';
+import type { OrderDTO } from '@/types/order';
+import { fmtDate, statusBadgeClass, statusLabel, truncate, remainingLabel } from '@/lib/ui/order';
 
-const STATUS_OPTIONS: OrderStatus[] = [
-  'PENDING',
-  'WAITING_PAYMENT',
-  'UNDERPAID',
-  'WAITING_CONFIRMATION',
-  'CONFIRMED',
-  'COMPLETED',
-  'EXPIRED',
-  'FAILED',
-];
-
-export default function OrderListPage() {
-  const [status, setStatus] = useState<OrderStatus | ''>('');
-  const [q, setQ] = useState('');
-  const [orders, setOrders] = useState<Order[]>([]);
+export default function MyOrdersPage() {
+  const [ids, setIds] = useState<string[]>([]);
+  const [rows, setRows] = useState<(OrderDTO | null)[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const cur = JSON.parse(localStorage.getItem('myOrders') || '[]') as string[];
+      setIds(cur);
+    } catch {
+      setIds([]);
+    }
+  }, []);
 
   async function load() {
     setLoading(true);
-    setError(null);
     try {
-      const data = await listOrders({ status: status || undefined, q: q || undefined, limit: 100 });
-      setOrders(data);
-    } catch (e: any) {
-      setError(e?.message || 'Gagal memuat orders');
+      const result = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const res = await getOrder(id);
+            return res.data;
+          } catch {
+            return null;
+          }
+        })
+      );
+      setRows(result);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    if (ids.length) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ids.join(',')]);
 
-  const filtered = useMemo(() => orders, [orders]);
+  const nonNullRows = useMemo(() => rows.filter(Boolean) as OrderDTO[], [rows]);
+
+  function removeId(id: string) {
+    const next = ids.filter((x) => x !== id);
+    setIds(next);
+    try {
+      localStorage.setItem('myOrders', JSON.stringify(next));
+    } catch {}
+    setRows((cur) => cur.filter((r) => (r as OrderDTO | null)?.id !== id));
+  }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Orders</h1>
-        <Link
-          href="/order/new"
-          className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
-        >
-          + New Order
-        </Link>
-      </div>
+    <div className="p-6">
+      <header className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">My Orders</h1>
+        <div className="flex items-center gap-2">
+          <Link href="/order/new" className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50">
+            + Order Baru
+          </Link>
+          <button
+            onClick={load}
+            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+          >
+            Refresh
+          </button>
+        </div>
+      </header>
 
-      <div className="flex flex-wrap gap-3">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Cari ID / alamat / tx / memo"
-          className="w-64 rounded-lg border px-3 py-2 text-sm"
-        />
-        <select
-          value={status}
-          onChange={(e) => setStatus((e.target.value || '') as OrderStatus | '')}
-          className="rounded-lg border px-3 py-2 text-sm"
-        >
-          <option value="">Semua status</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
-        >
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-      </div>
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
-          {error}
+      {ids.length === 0 ? (
+        <div className="rounded-md border bg-gray-50 p-4 text-sm text-gray-600">
+          Belum ada order di perangkat ini. Mulai dari{' '}
+          <Link href="/order/new" className="text-blue-600 hover:underline">
+            buat order baru
+          </Link>
+          .
+        </div>
+      ) : (
+        <div className="overflow-auto rounded-xl border">
+          <table className="min-w-[900px] w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr className="[&>th]:py-2 [&>th]:px-3 text-left">
+                <th>ID</th>
+                <th>Pair</th>
+                <th>Amount</th>
+                <th>Rate</th>
+                <th>Status</th>
+                <th>Dibuat</th>
+                <th>Expired</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {loading ? (
+                <tr><td colSpan={8} className="p-4 text-center text-gray-500">Memuat…</td></tr>
+              ) : nonNullRows.length === 0 ? (
+                <tr><td colSpan={8} className="p-4 text-center text-gray-500">Data tidak tersedia</td></tr>
+              ) : nonNullRows.map((r) => (
+                <tr key={r.id} className="[&>td]:py-2 [&>td]:px-3">
+                  <td className="font-mono">{truncate(r.id, 10)}</td>
+                  <td>
+                    <div className="flex flex-col">
+                      <span className="font-medium">
+                        {r.coinToBuy?.symbol || r.coinToBuyId} on {r.buyNetwork?.name || r.buyNetworkId}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        pay with {r.payWith?.symbol || r.payWithId} on {r.payNetwork?.name || r.payNetworkId}
+                      </span>
+                    </div>
+                  </td>
+                  <td>{r.amount}</td>
+                  <td>{r.priceRate}</td>
+                  <td>
+                    <span className={`rounded px-2 py-1 text-xs ${statusBadgeClass(r.status)}`}>
+                      {statusLabel(r.status)}
+                    </span>
+                  </td>
+                  <td>{fmtDate(r.createdAt)}</td>
+                  <td>{remainingLabel(r.expiresAt)}</td>
+                  <td className="flex items-center gap-2">
+                    <Link
+                      href={`/order/${r.id}`}
+                      className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
+                    >
+                      Buka
+                    </Link>
+                    <button
+                      onClick={() => removeId(r.id)}
+                      className="rounded-md border px-2 py-1 text-xs hover:bg-red-50"
+                    >
+                      Hapus
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left">
-            <tr>
-              <th className="px-4 py-2">ID</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Amount</th>
-              <th className="px-4 py-2">Rate</th>
-              <th className="px-4 py-2">Created</th>
-              <th className="px-4 py-2 text-right">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((o) => (
-              <tr key={o.id} className="border-t">
-                <td className="px-4 py-2 font-mono text-xs">{o.id}</td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`rounded px-2 py-1 text-xs ${
-                      o.status === 'COMPLETED'
-                        ? 'bg-green-100 text-green-700'
-                        : o.status === 'EXPIRED' || o.status === 'FAILED'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {o.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2">{o.amount}</td>
-                <td className="px-4 py-2">{o.priceRate}</td>
-                <td className="px-4 py-2">
-                  {o.createdAt ? new Date(o.createdAt).toLocaleString() : '-'}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <Link
-                    href={`/order/${o.id}`}
-                    className="rounded-lg border px-3 py-1 text-xs hover:bg-gray-50"
-                  >
-                    Detail
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && !loading && (
-              <tr>
-                <td className="px-4 py-6 text-center text-gray-500" colSpan={6}>
-                  Tidak ada data
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

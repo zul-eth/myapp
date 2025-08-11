@@ -1,77 +1,43 @@
-// src/lib/api/orders.ts
-import type { OrderStatus } from '@prisma/client';
+// Client helpers untuk memanggil API Orders
+import type { ListResponse, ItemResponse } from '@/types/http';
+import type { OrderDTO, CreateOrderPayload, UpdateOrderPayload, ListOrdersQuery } from '@/types/order';
 
-export type Order = {
-  id: string;
-  coinToBuyId: string;
-  buyNetworkId: string;
-  payWithId: string;
-  payNetworkId: string;
-  amount: number;
-  priceRate: number;
-  receivingAddr: string;
-  paymentAddr: string;
-  paymentMemo?: string | null;
-  txHash?: string | null;
-  confirmations: number;
-  status: OrderStatus;
-  createdAt?: string;
-  updatedAt?: string;
-  expiresAt?: string | null;
+const base = '/api/orders';
 
-  // relasi yang biasanya disertakan include: true
-  coinToBuy?: any;
-  buyNetwork?: any;
-  payWith?: any;
-  payNetwork?: any;
-};
+export async function listOrders(params: ListOrdersQuery = {}): Promise<ListResponse<OrderDTO>> {
+  const qsp = new URLSearchParams();
+  if (params.q) qsp.set('q', params.q);
+  if (params.status) qsp.set('status', params.status);
+  if (params.page) qsp.set('page', String(params.page));
+  if (params.limit) qsp.set('limit', String(params.limit));
 
-export async function listOrders(params?: {
-  status?: OrderStatus;
-  q?: string;
-  limit?: number;
-}) {
-  const sp = new URLSearchParams();
-  if (params?.status) sp.set('status', params.status);
-  if (params?.q) sp.set('q', params.q);
-  if (params?.limit) sp.set('limit', String(params.limit));
-
-  const res = await fetch(`/api/orders${sp.toString() ? `?${sp.toString()}` : ''}`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Gagal memuat orders');
-  return (await res.json()) as Order[];
+  const res = await fetch(`${base}${qsp.toString() ? `?${qsp}` : ''}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Gagal mengambil orders');
+  return res.json();
 }
 
-export async function createOrder(payload: {
-  coinToBuyId: string;
-  buyNetworkId: string;
-  payWithId: string;
-  payNetworkId: string;
-  amount: number;
-  receivingAddr: string;
-}) {
-  const res = await fetch('/api/orders', {
+export async function getOrder(id: string): Promise<ItemResponse<OrderDTO>> {
+  const res = await fetch(`${base}/${id}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Gagal mengambil detail order');
+  return res.json();
+}
+
+export async function createOrder(payload: CreateOrderPayload): Promise<ItemResponse<OrderDTO>> {
+  const res = await fetch(base, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Gagal membuat order');
-  return (await res.json()) as { message: string; order: Order };
+  return res.json();
 }
 
-export async function getOrderById(id: string) {
-  const res = await fetch(`/api/orders/${id}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Order tidak ditemukan');
-  return (await res.json()) as Order;
-}
-
-export async function updateOrderStatus(id: string, status: OrderStatus) {
-  const res = await fetch(`/api/orders/${id}`, {
+export async function updateOrder(id: string, payload: UpdateOrderPayload): Promise<ItemResponse<OrderDTO>> {
+  const res = await fetch(`${base}/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Gagal update status');
-  return (await res.json()) as { message: string; order: Order };
+  if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Gagal memperbarui order');
+  return res.json();
 }

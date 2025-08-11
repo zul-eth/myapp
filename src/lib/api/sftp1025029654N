@@ -36,87 +36,62 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateOrder = exports.createOrder = exports.getOrder = exports.listOrders = void 0;
-var base = '/api/orders';
-function listOrders(params) {
+exports.deleteRate = exports.updateRate = exports.createRate = exports.getRates = void 0;
+var baseUrl = '/api/rates';
+// getRates cukup pakai q (opsional)
+function getRates(params) {
     var _a;
-    if (params === void 0) { params = {}; }
-    return __awaiter(this, void 0, Promise, function () {
-        var qsp, res, _b;
+    return __awaiter(this, void 0, void 0, function () {
+        var usp, res, _b;
         return __generator(this, function (_c) {
             switch (_c.label) {
                 case 0:
-                    qsp = new URLSearchParams();
-                    if (params.q)
-                        qsp.set('q', params.q);
-                    if (params.status)
-                        qsp.set('status', params.status);
-                    if (params.page)
-                        qsp.set('page', String(params.page));
-                    if (params.limit)
-                        qsp.set('limit', String(params.limit));
-                    return [4 /*yield*/, fetch("".concat(base).concat(qsp.toString() ? "?".concat(qsp) : ''), { cache: 'no-store' })];
+                    usp = new URLSearchParams();
+                    if (params === null || params === void 0 ? void 0 : params.q)
+                        usp.set('q', params.q);
+                    return [4 /*yield*/, fetch("/api/rates".concat(usp.toString() ? "?".concat(usp) : ''), { cache: 'no-store' })];
                 case 1:
                     res = _c.sent();
                     if (!!res.ok) return [3 /*break*/, 3];
                     _b = Error.bind;
                     return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal mengambil orders']))();
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal mengambil rates']))();
                 case 3: return [2 /*return*/, res.json()];
             }
         });
     });
 }
-exports.listOrders = listOrders;
-function getOrder(id) {
+exports.getRates = getRates;
+function createRate(input) {
     var _a;
-    return __awaiter(this, void 0, Promise, function () {
+    return __awaiter(this, void 0, void 0, function () {
         var res, _b;
         return __generator(this, function (_c) {
             switch (_c.label) {
-                case 0: return [4 /*yield*/, fetch("".concat(base, "/").concat(id), { cache: 'no-store' })];
-                case 1:
-                    res = _c.sent();
-                    if (!!res.ok) return [3 /*break*/, 3];
-                    _b = Error.bind;
-                    return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal mengambil detail order']))();
-                case 3: return [2 /*return*/, res.json()];
-            }
-        });
-    });
-}
-exports.getOrder = getOrder;
-function createOrder(payload) {
-    var _a;
-    return __awaiter(this, void 0, Promise, function () {
-        var res, _b;
-        return __generator(this, function (_c) {
-            switch (_c.label) {
-                case 0: return [4 /*yield*/, fetch(base, {
+                case 0: return [4 /*yield*/, fetch(baseUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
+                        body: JSON.stringify(input),
                     })];
                 case 1:
                     res = _c.sent();
                     if (!!res.ok) return [3 /*break*/, 3];
                     _b = Error.bind;
                     return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal membuat order']))();
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal menambah rate']))();
                 case 3: return [2 /*return*/, res.json()];
             }
         });
     });
 }
-exports.createOrder = createOrder;
-function updateOrder(id, payload) {
+exports.createRate = createRate;
+function updateRate(id, payload) {
     var _a;
-    return __awaiter(this, void 0, Promise, function () {
+    return __awaiter(this, void 0, void 0, function () {
         var res, _b;
         return __generator(this, function (_c) {
             switch (_c.label) {
-                case 0: return [4 /*yield*/, fetch("".concat(base, "/").concat(id), {
+                case 0: return [4 /*yield*/, fetch("".concat(baseUrl, "/").concat(id), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload),
@@ -126,10 +101,29 @@ function updateOrder(id, payload) {
                     if (!!res.ok) return [3 /*break*/, 3];
                     _b = Error.bind;
                     return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal memperbarui order']))();
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal memperbarui rate']))();
                 case 3: return [2 /*return*/, res.json()];
             }
         });
     });
 }
-exports.updateOrder = updateOrder;
+exports.updateRate = updateRate;
+function deleteRate(id) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function () {
+        var res, _b;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
+                case 0: return [4 /*yield*/, fetch("".concat(baseUrl, "/").concat(id), { method: 'DELETE' })];
+                case 1:
+                    res = _c.sent();
+                    if (!!res.ok) return [3 /*break*/, 3];
+                    _b = Error.bind;
+                    return [4 /*yield*/, res.json().catch(function () { return ({}); })];
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal menghapus rate']))();
+                case 3: return [2 /*return*/, res.json()];
+            }
+        });
+    });
+}
+exports.deleteRate = deleteRate;

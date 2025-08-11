@@ -3,14 +3,15 @@ import type { ExchangeRate } from '@/types/exchangeRate';
 
 const baseUrl = '/api/rates';
 
-export async function getRates(params?: { q?: string; active?: 'true' | 'false' }) {
+// getRates cukup pakai q (opsional)
+export async function getRates(params?: { q?: string }) {
   const usp = new URLSearchParams();
   if (params?.q) usp.set('q', params.q);
-  if (params?.active) usp.set('active', params.active);
-  const res = await fetch(`${baseUrl}${usp.toString() ? `?${usp}` : ''}`, { cache: 'no-store' });
+  const res = await fetch(`/api/rates${usp.toString() ? `?${usp}` : ''}`, { cache: 'no-store' });
   if (!res.ok) throw new Error((await res.json().catch(()=>({})))?.message || 'Gagal mengambil rates');
   return res.json() as Promise<ExchangeRate[]>;
 }
+
 
 export async function createRate(input: {
   buyCoinId: string;

@@ -2,7 +2,6 @@
 export type ExchangeRate = {
   id: string;
   rate: number;
-  isActive: boolean;
   createdAt: string;
   updatedAt: string;
   updatedBy?: string | null;
