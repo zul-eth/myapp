@@ -45,6 +45,12 @@ Entity Method Endpoint Fungsi
 - PUT /api/payment-options/:id Update status aktif/tidaknya metode pembayaran
 - DELETE /api/payment-options/:id Hapus metode pembayaran
 
+# Rates 
+- GET api/coin-network mengembalikan array rate lengkap beserta relasi buyCoin, buyNetwork,   payCoin, payNetwork.
+- POST api/coin-network menerima { buyCoinId, buyNetworkId, payCoinId, payNetworkId, rate }.
+- PUT api/coin-network/:id menerima { rate? , isActive? } dan return objek rate terbaru
+- DELETE api/coin-network/:id menghapus entri.
+
 # Order
 - GET /api/orders/:id Lihat detail order tertentu
 - POST /api/order Buat order baru

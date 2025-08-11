@@ -16,10 +16,9 @@ model Coin {
   networks CoinNetwork[]
 
   paymentOptions PaymentOption[]
-  walletPools    WalletPool[]
   ordersToBuy    Order[]         @relation("BuyCoin")
   ordersToPay    Order[]         @relation("PayCoin")
-  
+
   buyRates ExchangeRate[] @relation("BuyRateCoin")
   payRates ExchangeRate[] @relation("PayRateCoin")
 
@@ -34,10 +33,9 @@ model Network {
   coins    CoinNetwork[]
 
   paymentOptions PaymentOption[]
-  walletPools    WalletPool[]
   buyOrders      Order[]         @relation("BuyNetwork")
   payOrders      Order[]         @relation("PayNetwork")
-  
+
   buyRates ExchangeRate[] @relation("BuyRateNetwork")
   payRates ExchangeRate[] @relation("PayRateNetwork")
 
@@ -51,12 +49,11 @@ model CoinNetwork {
 
   coin    Coin    @relation(fields: [coinId], references: [id])
   network Network @relation(fields: [networkId], references: [id])
-  
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   @@unique([coinId, networkId])
-  
 }
 
 model PaymentOption {
@@ -73,21 +70,24 @@ model PaymentOption {
   @@unique([coinId, networkId])
 }
 
-model WalletPool {
-  id        String @id @default(uuid())
-  coinId    String
-  networkId String
+model HdCursor {
+  id        String   @id @default(uuid())
+  chain     String   @unique // 'evm' | 'tron' | 'solana'
+  nextIndex Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
 
-  coin    Coin    @relation(fields: [coinId], references: [id])
-  network Network @relation(fields: [networkId], references: [id])
+model WalletPoolLegacy {
+  id              String @id @default(uuid())
+  chain           String // 'evm' | 'tron' | 'solana'
+  derivationIndex Int
+  address         String @unique
 
-  address       String   @unique
-  xpub          String?
-  isUsed        Boolean  @default(false)
-  assignedOrder String?
+  isUsed        Boolean  @default(true) // selalu true untuk alokasi order
+  assignedOrder String?  @unique
   createdAt     DateTime @default(now())
 
-  @@unique([coinId, networkId, address])
+  @@unique([chain, derivationIndex])
 }
 
 model Order {
@@ -105,9 +105,9 @@ model Order {
   payWith      Coin    @relation("PayCoin", fields: [payWithId], references: [id])
   payNetwork   Network @relation("PayNetwork", fields: [payNetworkId], references: [id])
 
-  amount    Float
+  amount         Float
   receivedAmount Float? @default(0)
-  priceRate Float
+  priceRate      Float
 
   receivingAddr String
   paymentAddr   String
@@ -117,39 +117,39 @@ model Order {
   confirmations Int         @default(0)
   status        OrderStatus @default(PENDING)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  expiresAt DateTime? 
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime?
 }
 
 model ExchangeRate {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  buyCoinId     String
-  buyNetworkId  String
-  payCoinId     String
-  payNetworkId  String
+  buyCoinId    String
+  buyNetworkId String
+  payCoinId    String
+  payNetworkId String
 
-  buyCoin       Coin     @relation("BuyRateCoin", fields: [buyCoinId], references: [id])
-  buyNetwork    Network  @relation("BuyRateNetwork", fields: [buyNetworkId], references: [id])
-  payCoin       Coin     @relation("PayRateCoin", fields: [payCoinId], references: [id])
-  payNetwork    Network  @relation("PayRateNetwork", fields: [payNetworkId], references: [id])
+  buyCoin    Coin    @relation("BuyRateCoin", fields: [buyCoinId], references: [id])
+  buyNetwork Network @relation("BuyRateNetwork", fields: [buyNetworkId], references: [id])
+  payCoin    Coin    @relation("PayRateCoin", fields: [payCoinId], references: [id])
+  payNetwork Network @relation("PayRateNetwork", fields: [payNetworkId], references: [id])
 
-  rate          Float
-  updatedBy     String?       // bisa email/nama admin yang mengubah
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  rate      Float
+  updatedBy String? // bisa email/nama admin yang mengubah
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([buyCoinId, buyNetworkId, payCoinId, payNetworkId])
 }
 
 enum OrderStatus {
-  PENDING                // Order baru dibuat
-  WAITING_PAYMENT        // Menunggu pembayaran (belum ada pembayaran)
-  UNDERPAID              // Sudah ada pembayaran, tapi kurang dari total
-  WAITING_CONFIRMATION   // Pembayaran diterima, menunggu konfirmasi jaringan
-  CONFIRMED              // Pembayaran terkonfirmasi penuh
-  COMPLETED              // Order berhasil dan selesai
-  EXPIRED                // Melewati batas waktu, tidak dibayar atau masih kurang
-  FAILED                 // Order gagal karena alasan lain
+  PENDING // Order baru dibuat
+  WAITING_PAYMENT // Menunggu pembayaran (belum ada pembayaran)
+  UNDERPAID // Sudah ada pembayaran, tapi kurang dari total
+  WAITING_CONFIRMATION // Pembayaran diterima, menunggu konfirmasi jaringan
+  CONFIRMED // Pembayaran terkonfirmasi penuh
+  COMPLETED // Order berhasil dan selesai
+  EXPIRED // Melewati batas waktu, tidak dibayar atau masih kurang
+  FAILED // Order gagal karena alasan lain
 }

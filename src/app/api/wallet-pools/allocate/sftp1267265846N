@@ -36,63 +36,54 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateAddress = void 0;
-// src/lib/hdwallet/universal.ts
-var coin_ethereum_1 = require("@okxweb3/coin-ethereum");
-var coin_tron_1 = require("@okxweb3/coin-tron");
-var coin_solana_1 = require("@okxweb3/coin-solana");
-function generateAddress(chain, mnemonic, index) {
-    return __awaiter(this, void 0, Promise, function () {
-        var _a, wallet, hdPath, privKey, address, wallet, hdPath, privKey, address, wallet, hdPath, privKey, address;
+exports.POST = void 0;
+// src/app/api/wallet-pools/allocate/route.ts
+var client_1 = require("@prisma/client");
+var server_1 = require("next/server");
+var prisma = new client_1.PrismaClient();
+/**
+ * POST /api/wallet-pools/allocate
+ * body: { coinId, networkId, orderId? }
+ * Ambil wallet pertama yang belum dipakai dan tandai dipakai.
+ */
+function POST(req) {
+    return __awaiter(this, void 0, void 0, function () {
+        var _a, coinId, networkId, orderId, wallet, updated, error_1;
         return __generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
-                    _a = chain;
-                    switch (_a) {
-                        case "eth": return [3 /*break*/, 1];
-                        case "tron": return [3 /*break*/, 5];
-                        case "solana": return [3 /*break*/, 9];
-                    }
-                    return [3 /*break*/, 13];
+                    _b.trys.push([0, 4, , 5]);
+                    return [4 /*yield*/, req.json()];
                 case 1:
-                    wallet = new coin_ethereum_1.EthWallet();
-                    return [4 /*yield*/, wallet.getDerivedPath({ index: index })];
+                    _a = _b.sent(), coinId = _a.coinId, networkId = _a.networkId, orderId = _a.orderId;
+                    if (!coinId || !networkId) {
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'coinId dan networkId wajib diisi' }, { status: 400 })];
+                    }
+                    return [4 /*yield*/, prisma.walletPool.findFirst({
+                            where: { coinId: coinId, networkId: networkId, isUsed: false },
+                            orderBy: { createdAt: 'asc' },
+                            include: { coin: true, network: true },
+                        })];
                 case 2:
-                    hdPath = _b.sent();
-                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
+                    wallet = _b.sent();
+                    if (!wallet) {
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Tidak ada wallet tersedia' }, { status: 404 })];
+                    }
+                    return [4 /*yield*/, prisma.walletPool.update({
+                            where: { id: wallet.id },
+                            data: { isUsed: true, assignedOrder: orderId || null },
+                            include: { coin: true, network: true },
+                        })];
                 case 3:
-                    privKey = _b.sent();
-                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privKey })];
+                    updated = _b.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Wallet allocated', wallet: updated })];
                 case 4:
-                    address = (_b.sent()).address;
-                    return [2 /*return*/, address];
-                case 5:
-                    wallet = new coin_tron_1.TrxWallet();
-                    return [4 /*yield*/, wallet.getDerivedPath({ index: index })];
-                case 6:
-                    hdPath = _b.sent();
-                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
-                case 7:
-                    privKey = _b.sent();
-                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privKey })];
-                case 8:
-                    address = (_b.sent()).address;
-                    return [2 /*return*/, address];
-                case 9:
-                    wallet = new coin_solana_1.SolWallet();
-                    return [4 /*yield*/, wallet.getDerivedPath({ index: index })];
-                case 10:
-                    hdPath = _b.sent();
-                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
-                case 11:
-                    privKey = _b.sent();
-                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privKey })];
-                case 12:
-                    address = (_b.sent()).address;
-                    return [2 /*return*/, address];
-                case 13: throw new Error("Unsupported chain");
+                    error_1 = _b.sent();
+                    console.error('POST /api/wallet-pools/allocate error:', error_1);
+                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Internal server error' }, { status: 500 })];
+                case 5: return [2 /*return*/];
             }
         });
     });
 }
-exports.generateAddress = generateAddress;
+exports.POST = POST;

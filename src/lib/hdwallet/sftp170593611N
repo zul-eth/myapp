@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mapNetworkToChains = void 0;
+/** Kembalikan pasangan chain untuk DB & HD runtime */
+function mapNetworkToChains(networkName) {
+    var n = networkName.trim().toLowerCase();
+    if (n.includes('tron') || n === 'trx')
+        return { dbChain: 'tron', runtimeChain: 'tron' };
+    if (n.includes('solana') || n === 'sol')
+        return { dbChain: 'solana', runtimeChain: 'solana' };
+    // default: semua EVM (ETH, BSC/BEP20, Polygon, Arbitrum, OP, Base, AVAX-C, dst.)
+    return { dbChain: 'evm', runtimeChain: 'eth' };
+}
+exports.mapNetworkToChains = mapNetworkToChains;

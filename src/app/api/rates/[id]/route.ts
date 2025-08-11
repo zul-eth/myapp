@@ -1,75 +1,65 @@
+// src/app/api/rates/[id]/route.ts
 import { PrismaClient } from '@prisma/client';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const prisma = new PrismaClient();
 
-// PUT /api/rates/:id
-export async function PUT(req: Request) {
+/**
+ * PUT /api/rates/:id
+ * body: { rate?: number, updatedBy?: string }
+ */
+export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+  const { id } = context.params;
   try {
-    const body = await req.json();
-    const {
-      buyCoinId,
-      buyNetworkId,
-      payCoinId,
-      payNetworkId,
-      rate,
-      updatedBy
-    } = body;
+    const body = await req.json().catch(() => ({}));
+    const actor =
+      body?.updatedBy ||
+      req.headers.get('x-actor') ||
+      req.headers.get('x-admin') ||
+      null;
 
-    if (!buyCoinId || !buyNetworkId || !payCoinId || !payNetworkId || !rate) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
+    const data: any = {};
+    if (body.rate !== undefined) {
+      const parsed = Number(body.rate);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return NextResponse.json({ message: 'Rate tidak valid' }, { status: 400 });
+      }
+      data.rate = parsed;
+    }
+    if (actor) data.updatedBy = actor;
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ message: 'Tidak ada perubahan' }, { status: 400 });
     }
 
     const updated = await prisma.exchangeRate.update({
-      where: {
-        buyCoinId_buyNetworkId_payCoinId_payNetworkId: {
-          buyCoinId,
-          buyNetworkId,
-          payCoinId,
-          payNetworkId
-        }
+      where: { id },
+      data,
+      include: {
+        buyCoin: true,
+        buyNetwork: true,
+        payCoin: true,
+        payNetwork: true,
       },
-      data: {
-        rate,
-        updatedBy
-      }
     });
 
-    return NextResponse.json({ message: "Rate updated", updatedAt: updated.updatedAt });
+    return NextResponse.json({ message: 'Rate updated', rate: updated });
   } catch (error) {
-    console.error("PUT /api/rates error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error(`PUT /api/rates/${id} error:`, error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
 
-export async function DELETE(req: Request) {
+/**
+ * DELETE /api/rates/:id
+ */
+export async function DELETE(_req: NextRequest, context: { params: { id: string } }) {
+  const { id } = context.params;
   try {
-    const body = await req.json();
-    const {
-      buyCoinId,
-      buyNetworkId,
-      payCoinId,
-      payNetworkId
-    } = body;
-
-    if (!buyCoinId || !buyNetworkId || !payCoinId || !payNetworkId) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
-    }
-
-    await prisma.exchangeRate.delete({
-      where: {
-        buyCoinId_buyNetworkId_payCoinId_payNetworkId: {
-          buyCoinId,
-          buyNetworkId,
-          payCoinId,
-          payNetworkId
-        }
-      }
-    });
-
-    return NextResponse.json({ message: "Rate deleted" });
+    await prisma.exchangeRate.delete({ where: { id } });
+    return NextResponse.json({ message: 'Rate deleted' });
   } catch (error) {
-    console.error("DELETE /api/rates error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error(`DELETE /api/rates/${id} error:`, error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
