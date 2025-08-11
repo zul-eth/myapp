@@ -36,58 +36,48 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.POST = exports.GET = void 0;
-// src/app/api/wallet-pools/route.ts
+exports.GET = void 0;
 var client_1 = require("@prisma/client");
 var server_1 = require("next/server");
 var prisma = new client_1.PrismaClient();
 /**
- * GET /api/wallet-pools
- * Query:
- * - coinId?: string
- * - networkId?: string
- * - isUsed?: 'true' | 'false'
- * - q?: string (cari by address/xpub/id)
- * - limit?: number (default 50, max 200)
+ * GET /api/wallet-pools?chain&isUsed&q&limit
+ * Sumber data: WalletPoolLegacy
  */
 function GET(req) {
     return __awaiter(this, void 0, void 0, function () {
-        var searchParams, coinId, networkId, isUsedParam, q, limit, where, wallets, error_1;
+        var searchParams, chain, isUsed, q, limit, where, rows, error_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     _a.trys.push([0, 2, , 3]);
                     searchParams = new URL(req.url).searchParams;
-                    coinId = searchParams.get('coinId') || undefined;
-                    networkId = searchParams.get('networkId') || undefined;
-                    isUsedParam = searchParams.get('isUsed') || undefined;
+                    chain = searchParams.get('chain') || undefined;
+                    isUsed = searchParams.get('isUsed') || undefined;
                     q = searchParams.get('q') || undefined;
-                    limit = Math.min(Number(searchParams.get('limit') || 50), 200);
+                    limit = Math.min(Number(searchParams.get('limit') || 100), 500);
                     where = {};
-                    if (coinId)
-                        where.coinId = coinId;
-                    if (networkId)
-                        where.networkId = networkId;
-                    if (isUsedParam === 'true')
+                    if (chain)
+                        where.chain = chain;
+                    if (isUsed === 'true')
                         where.isUsed = true;
-                    if (isUsedParam === 'false')
+                    if (isUsed === 'false')
                         where.isUsed = false;
                     if (q) {
                         where.OR = [
                             { address: { contains: q, mode: 'insensitive' } },
-                            { xpub: { contains: q, mode: 'insensitive' } },
+                            { assignedOrder: { contains: q, mode: 'insensitive' } },
                             { id: { contains: q, mode: 'insensitive' } },
                         ];
                     }
-                    return [4 /*yield*/, prisma.walletPool.findMany({
+                    return [4 /*yield*/, prisma.walletPoolLegacy.findMany({
                             where: where,
                             orderBy: { createdAt: 'desc' },
                             take: limit,
-                            include: { coin: true, network: true },
                         })];
                 case 1:
-                    wallets = _a.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(wallets)];
+                    rows = _a.sent();
+                    return [2 /*return*/, server_1.NextResponse.json(rows)];
                 case 2:
                     error_1 = _a.sent();
                     console.error('GET /api/wallet-pools error:', error_1);
@@ -98,60 +88,4 @@ function GET(req) {
     });
 }
 exports.GET = GET;
-/**
- * POST /api/wallet-pools
- * body: { coinId, networkId, address, xpub? }
- */
-function POST(req) {
-    return __awaiter(this, void 0, void 0, function () {
-        var body, _a, coinId, networkId, address, xpub, _b, coin, network, existing, wallet, error_2;
-        return __generator(this, function (_c) {
-            switch (_c.label) {
-                case 0:
-                    _c.trys.push([0, 5, , 6]);
-                    return [4 /*yield*/, req.json()];
-                case 1:
-                    body = _c.sent();
-                    _a = body || {}, coinId = _a.coinId, networkId = _a.networkId, address = _a.address, xpub = _a.xpub;
-                    if (!coinId || !networkId || !address) {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'coinId, networkId, dan address wajib diisi' }, { status: 400 })];
-                    }
-                    return [4 /*yield*/, Promise.all([
-                            prisma.coin.findUnique({ where: { id: coinId } }),
-                            prisma.network.findUnique({ where: { id: networkId } }),
-                        ])];
-                case 2:
-                    _b = _c.sent(), coin = _b[0], network = _b[1];
-                    if (!coin || !network) {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Coin atau Network tidak ditemukan' }, { status: 404 })];
-                    }
-                    return [4 /*yield*/, prisma.walletPool.findFirst({
-                            where: {
-                                OR: [
-                                    { address: address },
-                                    { coinId: coinId, networkId: networkId, address: address },
-                                ],
-                            },
-                        })];
-                case 3:
-                    existing = _c.sent();
-                    if (existing) {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Wallet sudah ada (duplikat address)' }, { status: 409 })];
-                    }
-                    return [4 /*yield*/, prisma.walletPool.create({
-                            data: { coinId: coinId, networkId: networkId, address: address, xpub: xpub || null },
-                            include: { coin: true, network: true },
-                        })];
-                case 4:
-                    wallet = _c.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Wallet created', wallet: wallet })];
-                case 5:
-                    error_2 = _c.sent();
-                    console.error('POST /api/wallet-pools error:', error_2);
-                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Internal server error' }, { status: 500 })];
-                case 6: return [2 /*return*/];
-            }
-        });
-    });
-}
-exports.POST = POST;
+// NOTE: POST lama (manual address) DIHAPUS. Gunakan /derive untuk generate.

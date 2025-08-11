@@ -123,6 +123,7 @@ export default function AdminHomePage() {
           <QuickLink href="/admin/payment-options" title="Payment Options" />
           <QuickLink href="/admin/rates" title="Kelola Rates" />
           <QuickLink href="/order" title="Riwayat Order" />
+          <QuickLink href="/admin/wallet-pools" title="Wallet Pools" />
         </div>
       </section>
 

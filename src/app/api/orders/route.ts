@@ -1,13 +1,17 @@
 // src/app/api/orders/route.ts
 import { PrismaClient, OrderStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
-import { allocatePaymentAddressByChain } from '@/server/alloc/hdAllocator';
+import { generateAddress } from '@/lib/hdwallet/universal';
 
 const prisma = new PrismaClient();
 
-/**
- * GET /api/orders?status&limit&q
- */
+function mapNetworkToChains(networkName: string): { dbChain: 'evm' | 'tron' | 'solana'; runtimeChain: 'eth' | 'tron' | 'solana' } {
+  const n = networkName.trim().toLowerCase();
+  if (n.includes('tron') || n === 'trx') return { dbChain: 'tron', runtimeChain: 'tron' };
+  if (n.includes('solana') || n === 'sol') return { dbChain: 'solana', runtimeChain: 'solana' };
+  return { dbChain: 'evm', runtimeChain: 'eth' };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -24,7 +28,6 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
-        // sesuai schema kamu
         coinToBuy: true,
         buyNetwork: true,
         payWith: true,
@@ -39,61 +42,74 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/**
- * POST /api/orders
- * body: { coinToBuyId, buyNetworkId, payWithId, payNetworkId, amount, receivingAddr }
- * Buat order + alokasikan alamat pembayaran berbasis chain (evm/tron/solana).
- */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { coinToBuyId, buyNetworkId, payWithId, payNetworkId, amount, receivingAddr } = body || {};
-
-    // validasi dasar
     if (!coinToBuyId || !buyNetworkId || !payWithId || !payNetworkId || !amount || !receivingAddr) {
       return NextResponse.json({ message: 'Field wajib belum lengkap' }, { status: 400 });
     }
+    const mnemonic = process.env.MNEMONIC;
+    if (!mnemonic) return NextResponse.json({ message: 'MNEMONIC belum dikonfigurasi' }, { status: 500 });
 
-    // cari rate (wajib ada)
-    const rateEntry = await prisma.exchangeRate.findFirst({
-      where: { buyCoinId: coinToBuyId, buyNetworkId, payCoinId: payWithId, payNetworkId },
-      select: { rate: true },
+    const { createdOrderId } = await prisma.$transaction(async (tx) => {
+      const [payNetwork, rateEntry] = await Promise.all([
+        tx.network.findUnique({ where: { id: payNetworkId } }),
+        tx.exchangeRate.findFirst({
+          where: { buyCoinId: coinToBuyId, buyNetworkId, payCoinId: payWithId, payNetworkId },
+          select: { rate: true },
+        }),
+      ]);
+      if (!payNetwork) throw new Error('Network pembayaran tidak ditemukan');
+      if (!rateEntry || !Number.isFinite(Number(rateEntry.rate)) || Number(rateEntry.rate) <= 0) {
+        throw new Error('Rate tidak ditemukan/invalid untuk pasangan ini');
+      }
+
+      const created = await tx.order.create({
+        data: {
+          coinToBuyId,
+          buyNetworkId,
+          payWithId,
+          payNetworkId,
+          amount: Number(amount),
+          priceRate: Number(rateEntry.rate),
+          receivingAddr,
+          status: 'WAITING_PAYMENT',
+        },
+        select: { id: true },
+      });
+
+      const { dbChain, runtimeChain } = mapNetworkToChains(payNetwork.name);
+      const cur = await tx.hdCursor.upsert({
+        where: { chain: dbChain },
+        update: { nextIndex: { increment: 1 } },
+        create: { chain: dbChain, nextIndex: 1 },
+      });
+      const indexAssigned = cur.nextIndex - 1;
+
+      const address = await generateAddress(runtimeChain as any, mnemonic, indexAssigned);
+      if (!address || typeof address !== 'string') throw new Error('Gagal generate address');
+
+      await tx.walletPoolLegacy.create({
+        data: {
+          chain: dbChain,
+          derivationIndex: indexAssigned,
+          address,
+          isUsed: true,
+          assignedOrder: created.id,
+        },
+      });
+
+      await tx.order.update({
+        where: { id: created.id },
+        data: { paymentAddr: address },
+      });
+
+      return { createdOrderId: created.id };
     });
-    if (!rateEntry) {
-      return NextResponse.json({ message: 'Rate tidak ditemukan untuk pasangan ini' }, { status: 400 });
-    }
 
-    const priceRate = Number(rateEntry.rate);
-    if (!Number.isFinite(priceRate) || priceRate <= 0) {
-      return NextResponse.json({ message: 'Rate tidak valid' }, { status: 400 });
-    }
-
-    // buat order (paymentAddr diisi setelah allocate)
-    const created = await prisma.order.create({
-      data: {
-        coinToBuyId,
-        buyNetworkId,
-        payWithId,
-        payNetworkId,
-        amount: Number(amount),
-        priceRate,
-        receivingAddr,
-        status: 'WAITING_PAYMENT',
-        // optional: set expiresAt
-        // expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-      },
-    });
-
-    // alokasikan alamat by chain (atomic di dalam allocator)
-    await allocatePaymentAddressByChain({
-      payWithId,
-      payNetworkId,
-      orderId: created.id,
-    });
-
-    // ambil ulang order lengkap (sudah ada paymentAddr)
     const order = await prisma.order.findUnique({
-      where: { id: created.id },
+      where: { id: createdOrderId },
       include: {
         coinToBuy: true,
         buyNetwork: true,

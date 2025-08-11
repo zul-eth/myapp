@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const prisma = new PrismaClient();
 
-// GET /api/orders/:id
 export async function GET(_req: NextRequest, ctx: { params: { id: string } }) {
   try {
     const order = await prisma.order.findUnique({
@@ -24,14 +23,12 @@ export async function GET(_req: NextRequest, ctx: { params: { id: string } }) {
   }
 }
 
-// PUT /api/orders/:id   body: { status: OrderStatus }
 export async function PUT(req: NextRequest, ctx: { params: { id: string } }) {
   try {
     const { status } = await req.json();
     if (!status || !(status in OrderStatus)) {
       return NextResponse.json({ message: 'Status tidak valid' }, { status: 400 });
     }
-
     const updated = await prisma.order.update({
       where: { id: ctx.params.id },
       data: { status },
@@ -42,7 +39,6 @@ export async function PUT(req: NextRequest, ctx: { params: { id: string } }) {
         payNetwork: true,
       },
     });
-
     return NextResponse.json({ message: 'Order updated', order: updated });
   } catch (e) {
     console.error('PUT /api/orders/:id error:', e);

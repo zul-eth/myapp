@@ -36,44 +36,44 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateOrderStatus = exports.getOrderById = exports.createOrder = exports.listOrders = void 0;
-function listOrders(params) {
+exports.deleteWalletPool = exports.updateWalletPool = exports.deriveWallets = exports.getWalletPools = void 0;
+var base = '/api/wallet-pools';
+function getWalletPools(params) {
     var _a;
-    return __awaiter(this, void 0, void 0, function () {
-        var sp, res, _b;
+    return __awaiter(this, void 0, Promise, function () {
+        var usp, res, _b;
         return __generator(this, function (_c) {
             switch (_c.label) {
                 case 0:
-                    sp = new URLSearchParams();
-                    if (params === null || params === void 0 ? void 0 : params.status)
-                        sp.set('status', params.status);
+                    usp = new URLSearchParams();
+                    if (params === null || params === void 0 ? void 0 : params.chain)
+                        usp.set('chain', params.chain);
+                    if (params === null || params === void 0 ? void 0 : params.isUsed)
+                        usp.set('isUsed', params.isUsed);
                     if (params === null || params === void 0 ? void 0 : params.q)
-                        sp.set('q', params.q);
+                        usp.set('q', params.q);
                     if (params === null || params === void 0 ? void 0 : params.limit)
-                        sp.set('limit', String(params.limit));
-                    return [4 /*yield*/, fetch("/api/orders".concat(sp.toString() ? "?".concat(sp.toString()) : ''), {
-                            cache: 'no-store',
-                        })];
+                        usp.set('limit', String(params.limit));
+                    return [4 /*yield*/, fetch("".concat(base).concat(usp.toString() ? "?".concat(usp) : ''), { cache: 'no-store' })];
                 case 1:
                     res = _c.sent();
                     if (!!res.ok) return [3 /*break*/, 3];
                     _b = Error.bind;
                     return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal memuat orders']))();
-                case 3: return [4 /*yield*/, res.json()];
-                case 4: return [2 /*return*/, (_c.sent())];
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal mengambil ledger']))();
+                case 3: return [2 /*return*/, res.json()];
             }
         });
     });
 }
-exports.listOrders = listOrders;
-function createOrder(payload) {
+exports.getWalletPools = getWalletPools;
+function deriveWallets(payload) {
     var _a;
     return __awaiter(this, void 0, void 0, function () {
         var res, _b;
         return __generator(this, function (_c) {
             switch (_c.label) {
-                case 0: return [4 /*yield*/, fetch('/api/orders', {
+                case 0: return [4 /*yield*/, fetch("".concat(base, "/derive"), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload),
@@ -83,55 +83,52 @@ function createOrder(payload) {
                     if (!!res.ok) return [3 /*break*/, 3];
                     _b = Error.bind;
                     return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal membuat order']))();
-                case 3: return [4 /*yield*/, res.json()];
-                case 4: return [2 /*return*/, (_c.sent())];
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal generate alamat']))();
+                case 3: return [2 /*return*/, res.json()];
             }
         });
     });
 }
-exports.createOrder = createOrder;
-function getOrderById(id) {
+exports.deriveWallets = deriveWallets;
+function updateWalletPool(id, payload) {
     var _a;
     return __awaiter(this, void 0, void 0, function () {
         var res, _b;
         return __generator(this, function (_c) {
             switch (_c.label) {
-                case 0: return [4 /*yield*/, fetch("/api/orders/".concat(id), { cache: 'no-store' })];
-                case 1:
-                    res = _c.sent();
-                    if (!!res.ok) return [3 /*break*/, 3];
-                    _b = Error.bind;
-                    return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Order tidak ditemukan']))();
-                case 3: return [4 /*yield*/, res.json()];
-                case 4: return [2 /*return*/, (_c.sent())];
-            }
-        });
-    });
-}
-exports.getOrderById = getOrderById;
-function updateOrderStatus(id, status) {
-    var _a;
-    return __awaiter(this, void 0, void 0, function () {
-        var res, _b;
-        return __generator(this, function (_c) {
-            switch (_c.label) {
-                case 0: return [4 /*yield*/, fetch("/api/orders/".concat(id), {
+                case 0: return [4 /*yield*/, fetch("".concat(base, "/").concat(id), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: status }),
+                        body: JSON.stringify(payload),
                     })];
                 case 1:
                     res = _c.sent();
                     if (!!res.ok) return [3 /*break*/, 3];
                     _b = Error.bind;
                     return [4 /*yield*/, res.json().catch(function () { return ({}); })];
-                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal update status']))();
-                case 3: return [4 /*yield*/, res.json()];
-                case 4: return [2 /*return*/, (_c.sent())];
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal memperbarui ledger']))();
+                case 3: return [2 /*return*/, res.json()];
             }
         });
     });
 }
-exports.updateOrderStatus = updateOrderStatus;
+exports.updateWalletPool = updateWalletPool;
+function deleteWalletPool(id) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function () {
+        var res, _b;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
+                case 0: return [4 /*yield*/, fetch("".concat(base, "/").concat(id), { method: 'DELETE' })];
+                case 1:
+                    res = _c.sent();
+                    if (!!res.ok) return [3 /*break*/, 3];
+                    _b = Error.bind;
+                    return [4 /*yield*/, res.json().catch(function () { return ({}); })];
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal menghapus baris ledger']))();
+                case 3: return [2 /*return*/, res.json()];
+            }
+        });
+    });
+}
+exports.deleteWalletPool = deleteWalletPool;

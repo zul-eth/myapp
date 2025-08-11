@@ -37,76 +37,50 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DELETE = exports.PUT = void 0;
-// src/app/api/wallet-pools/[id]/route.ts
 var client_1 = require("@prisma/client");
 var server_1 = require("next/server");
 var prisma = new client_1.PrismaClient();
 /**
  * PUT /api/wallet-pools/:id
- * body: { address?, xpub?, isUsed?, assignedOrder? }
- * - Jika isUsed = false → assignedOrder akan dikosongkan.
+ * body: { isUsed?: boolean, assignedOrder?: string|null }
+ * - jika set isUsed=false → otomatis kosongkan assignedOrder bila tidak dikirim.
  */
-function PUT(req, context) {
+function PUT(req, ctx) {
     return __awaiter(this, void 0, void 0, function () {
-        var id, body, data, clash, wallet, error_1;
+        var id, body, data, wallet, error_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    id = context.params.id;
+                    id = ctx.params.id;
                     _a.label = 1;
                 case 1:
-                    _a.trys.push([1, 6, , 7]);
+                    _a.trys.push([1, 4, , 5]);
                     return [4 /*yield*/, req.json().catch(function () { return ({}); })];
                 case 2:
                     body = _a.sent();
                     data = {};
-                    if (!(body.address !== undefined)) return [3 /*break*/, 4];
-                    if (!String(body.address).trim()) {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Address tidak valid' }, { status: 400 })];
-                    }
-                    return [4 /*yield*/, prisma.walletPool.findFirst({
-                            where: { address: body.address, NOT: { id: id } },
-                            select: { id: true },
-                        })];
-                case 3:
-                    clash = _a.sent();
-                    if (clash) {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Address sudah dipakai wallet lain' }, { status: 409 })];
-                    }
-                    data.address = String(body.address);
-                    _a.label = 4;
-                case 4:
-                    if (body.xpub !== undefined) {
-                        data.xpub = body.xpub ? String(body.xpub) : null;
-                    }
-                    if (body.isUsed !== undefined) {
+                    if (body.isUsed !== undefined)
                         data.isUsed = Boolean(body.isUsed);
-                        if (!data.isUsed) {
-                            data.assignedOrder = null; // kosongkan jika dilepas
-                        }
-                    }
-                    if (body.assignedOrder !== undefined) {
-                        data.assignedOrder = body.assignedOrder ? String(body.assignedOrder) : null;
-                        // saat set assignedOrder, otomatis isUsed=true
-                        if (data.assignedOrder)
-                            data.isUsed = true;
+                    if (body.assignedOrder !== undefined)
+                        data.assignedOrder = body.assignedOrder || null;
+                    if (body.isUsed === false && body.assignedOrder === undefined) {
+                        data.assignedOrder = null;
                     }
                     if (Object.keys(data).length === 0) {
                         return [2 /*return*/, server_1.NextResponse.json({ message: 'Tidak ada perubahan' }, { status: 400 })];
                     }
-                    return [4 /*yield*/, prisma.walletPool.update({
+                    return [4 /*yield*/, prisma.walletPoolLegacy.update({
                             where: { id: id },
                             data: data,
-                            include: { coin: true, network: true },
                         })];
-                case 5:
+                case 3:
                     wallet = _a.sent();
                     return [2 /*return*/, server_1.NextResponse.json({ message: 'Wallet updated', wallet: wallet })];
-                case 6:
+                case 4:
                     error_1 = _a.sent();
                     console.error("PUT /api/wallet-pools/".concat(id, " error:"), error_1);
                     return [2 /*return*/, server_1.NextResponse.json({ message: 'Internal server error' }, { status: 500 })];
-                case 7: return [2 /*return*/];
+                case 5: return [2 /*return*/];
             }
         });
     });
@@ -114,27 +88,27 @@ function PUT(req, context) {
 exports.PUT = PUT;
 /**
  * DELETE /api/wallet-pools/:id
- * - Tolak hapus bila isUsed = true (demi keamanan).
+ * - Hanya boleh hapus jika isUsed = false (demi keamanan)
  */
-function DELETE(_req, context) {
+function DELETE(_req, ctx) {
     return __awaiter(this, void 0, void 0, function () {
         var id, row, error_2;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    id = context.params.id;
+                    id = ctx.params.id;
                     _a.label = 1;
                 case 1:
                     _a.trys.push([1, 4, , 5]);
-                    return [4 /*yield*/, prisma.walletPool.findUnique({ where: { id: id } })];
+                    return [4 /*yield*/, prisma.walletPoolLegacy.findUnique({ where: { id: id } })];
                 case 2:
                     row = _a.sent();
                     if (!row)
                         return [2 /*return*/, server_1.NextResponse.json({ message: 'Not found' }, { status: 404 })];
                     if (row.isUsed) {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Tidak bisa hapus wallet yang sedang digunakan' }, { status: 400 })];
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Tidak bisa hapus yang sedang digunakan' }, { status: 400 })];
                     }
-                    return [4 /*yield*/, prisma.walletPool.delete({ where: { id: id } })];
+                    return [4 /*yield*/, prisma.walletPoolLegacy.delete({ where: { id: id } })];
                 case 3:
                     _a.sent();
                     return [2 /*return*/, server_1.NextResponse.json({ message: 'Wallet deleted' })];

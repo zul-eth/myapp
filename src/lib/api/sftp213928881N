@@ -36,7 +36,34 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateOrderStatus = exports.getOrderById = exports.createOrder = void 0;
+exports.updateOrderStatus = exports.getOrderById = exports.createOrder = exports.listOrders = void 0;
+function listOrders(params) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function () {
+        var usp, res, _b;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
+                case 0:
+                    usp = new URLSearchParams();
+                    if (params === null || params === void 0 ? void 0 : params.q)
+                        usp.set('q', params.q);
+                    if (params === null || params === void 0 ? void 0 : params.status)
+                        usp.set('status', params.status);
+                    if (params === null || params === void 0 ? void 0 : params.limit)
+                        usp.set('limit', String(params.limit));
+                    return [4 /*yield*/, fetch("/api/orders".concat(usp.toString() ? "?".concat(usp) : ''), { cache: 'no-store' })];
+                case 1:
+                    res = _c.sent();
+                    if (!!res.ok) return [3 /*break*/, 3];
+                    _b = Error.bind;
+                    return [4 /*yield*/, res.json().catch(function () { return ({}); })];
+                case 2: throw new (_b.apply(Error, [void 0, ((_a = (_c.sent())) === null || _a === void 0 ? void 0 : _a.message) || 'Gagal mengambil orders']))();
+                case 3: return [2 /*return*/, res.json()];
+            }
+        });
+    });
+}
+exports.listOrders = listOrders;
 function createOrder(input) {
     var _a;
     return __awaiter(this, void 0, void 0, function () {
