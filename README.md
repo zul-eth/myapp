@@ -64,3 +64,6 @@ Entity Method Endpoint Fungsi
 - DELETE /api/wallet-pool/:id Hapus wallet dari pool
 
 
+# payment metod
+- evm  native & erc20 token (eth, base, op, arb ,pol, bnb | usdt,usdc,dai)
+- tron, solana, eos, xrp, doge, sui, ltc, ton

@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // pastikan coin/network-nya juga aktif
+    // hanya coin & network yang aktif
     where.coin = { ...(where.coin || {}), isActive: true };
     where.network = { ...(where.network || {}), isActive: true };
 
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       include: { coin: true, network: true },
     });
 
-    // UI mengharapkan array langsung dengan { coin, network, id, isActive }
+    // UI mengharapkan array langsung
     return NextResponse.json(rows);
   } catch (e) {
     console.error('GET /api/payment-options error:', e);
@@ -46,87 +46,56 @@ export async function GET(req: NextRequest) {
   }
 }
 
-
-// POST: Tambah kombinasi coin-network untuk payment
+/**
+ * POST /api/payment-options
+ * Body: { coinId: string, networkId: string }
+ * - Jika kombinasi sudah ada & nonaktif → aktifkan lagi
+ * - Jika belum ada → buat baru (aktif)
+ */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { coinToBuyId, buyNetworkId, payWithId, payNetworkId, amount, receivingAddr } = body || {};
-    if (!coinToBuyId || !buyNetworkId || !payWithId || !payNetworkId || !amount || !receivingAddr) {
+    const { coinId, networkId } = await req.json();
+
+    if (!coinId || !networkId) {
       return NextResponse.json({ message: 'Field wajib belum lengkap' }, { status: 400 });
     }
 
-    const mnemonic = process.env.MNEMONIC;
-    if (!mnemonic) return NextResponse.json({ message: 'MNEMONIC belum dikonfigurasi' }, { status: 500 });
-
-    const { createdOrderId } = await prisma.$transaction(async (tx) => {
-      // 1) ambil network pembayaran & rate
-      const [payNetwork, rateEntry] = await Promise.all([
-        tx.network.findUnique({ where: { id: payNetworkId } }),
-        tx.exchangeRate.findFirst({
-          where: { buyCoinId: coinToBuyId, buyNetworkId, payCoinId: payWithId, payNetworkId },
-          select: { rate: true },
-        }),
-      ]);
-      if (!payNetwork) throw new Error('Network pembayaran tidak ditemukan');
-      const priceRate = Number(rateEntry?.rate);
-      if (!Number.isFinite(priceRate) || priceRate <= 0) throw new Error('Rate tidak ditemukan/invalid untuk pasangan ini');
-
-      // 2) tentukan chain & klaim index dari HdCursor
-      const n = payNetwork.name.trim().toLowerCase();
-      const dbChain: 'evm' | 'tron' | 'solana' =
-        n.includes('tron') || n === 'trx' ? 'tron' : n.includes('solana') || n === 'sol' ? 'solana' : 'evm';
-      const runtimeChain: 'eth' | 'tron' | 'solana' = dbChain === 'evm' ? 'eth' : (dbChain as any);
-
-      const cur = await tx.hdCursor.upsert({
-        where: { chain: dbChain },
-        update: { nextIndex: { increment: 1 } },
-        create: { chain: dbChain, nextIndex: 1 },
-      });
-      const indexAssigned = cur.nextIndex - 1;
-
-      // 3) derive address dari HD wallet
-      const address = await generateAddress(runtimeChain as any, mnemonic, indexAssigned);
-      if (!address || typeof address !== 'string') throw new Error('Gagal generate address');
-
-      // 4) buat order LANGSUNG dengan paymentAddr terisi
-      const created = await tx.order.create({
-        data: {
-          coinToBuyId,
-          buyNetworkId,
-          payWithId,
-          payNetworkId,
-          amount: Number(amount),
-          priceRate,
-          receivingAddr,
-          paymentAddr: address,          // <- wajib diisi saat create
-          status: 'WAITING_PAYMENT',
-        },
-        select: { id: true },
-      });
-
-      // 5) catat ledger assignment
-      await tx.walletPoolLegacy.create({
-        data: {
-          chain: dbChain,
-          derivationIndex: indexAssigned,
-          address,
-          isUsed: true,
-          assignedOrder: created.id,
-        },
-      });
-
-      return { createdOrderId: created.id };
+    // cek apakah sudah ada (unik di schema: @@unique([coinId, networkId]))
+    const existing = await prisma.paymentOption.findUnique({
+      where: { coinId_networkId: { coinId, networkId } },
+      include: { coin: true, network: true },
     });
 
-    const order = await prisma.order.findUnique({
-      where: { id: createdOrderId },
-      include: { coinToBuy: true, buyNetwork: true, payWith: true, payNetwork: true },
+    if (existing) {
+      if (existing.isActive) {
+        return NextResponse.json(
+          { message: 'Payment option sudah ada & aktif', paymentOption: existing },
+          { status: 200 }
+        );
+      }
+      const reactivated = await prisma.paymentOption.update({
+        where: { id: existing.id },
+        data: { isActive: true },
+        include: { coin: true, network: true },
+      });
+      return NextResponse.json(
+        { message: 'Payment option diaktifkan kembali', paymentOption: reactivated },
+        { status: 200 }
+      );
+    }
+
+    // buat baru
+    const created = await prisma.paymentOption.create({
+      data: { coinId, networkId, isActive: true },
+      include: { coin: true, network: true },
     });
 
-    return NextResponse.json({ message: 'Order created', order });
+    return NextResponse.json(
+      { message: 'Payment option created', paymentOption: created },
+      { status: 201 }
+    );
   } catch (error: any) {
-    console.error('POST /api/orders error:', error);
+    console.error('POST /api/payment-options error:', error);
     return NextResponse.json({ message: error?.message || 'Internal server error' }, { status: 500 });
   }
 }

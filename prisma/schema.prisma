@@ -116,6 +116,9 @@ model Order {
   txHash        String?
   confirmations Int         @default(0)
   status        OrderStatus @default(PENDING)
+  
+  payoutHash      String?   @db.VarChar(128) @unique
+  payoutAt        DateTime? //, waktu submit payout
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

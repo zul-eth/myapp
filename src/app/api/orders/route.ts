@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbToRuntimeChain } from '@/lib/hdwallet/chainMap';
 import { generateAddress } from '@/lib/hdwallet/universal';
 
+// ⬇️ pastikan path import sesuai file helper kamu
+import { addAddressesToWebhook } from '@/lib/payments/notify';
+import { getEvmConfigByName } from '@/lib/payments/networkMap';
+
 const prisma = new PrismaClient();
 const PAYMENT_WINDOW_MINUTES = 15;
 
@@ -76,12 +80,7 @@ export async function POST(req: NextRequest) {
 
     // ambil rate
     const rateRow = await prisma.exchangeRate.findFirst({
-      where: {
-        buyCoinId: coinToBuyId,
-        buyNetworkId,
-        payCoinId: payWithId,
-        payNetworkId,
-      },
+      where: { buyCoinId: coinToBuyId, buyNetworkId, payCoinId: payWithId, payNetworkId },
     });
     if (!rateRow) return NextResponse.json({ message: 'Rate tidak ditemukan' }, { status: 404 });
 
@@ -106,12 +105,7 @@ export async function POST(req: NextRequest) {
       const address = await generateAddress(runtimeChain, MNEMONIC, index);
 
       wallet = await prisma.walletPoolLegacy.create({
-        data: {
-          chain: dbChain,
-          derivationIndex: index,
-          address,
-          isUsed: false,
-        },
+        data: { chain: dbChain, derivationIndex: index, address, isUsed: false },
       });
 
       // advance cursor
@@ -126,22 +120,28 @@ export async function POST(req: NextRequest) {
     // buat order
     const order = await prisma.order.create({
       data: {
-        coinToBuyId,
-        buyNetworkId,
-        payWithId,
-        payNetworkId,
-        amount,
-        priceRate: rateRow.rate,
+        coinToBuyId, buyNetworkId, payWithId, payNetworkId,
+        amount, priceRate: rateRow.rate,
         receivingAddr,
         paymentAddr: wallet.address,
         paymentMemo: null,
         txHash: null,
         confirmations: 0,
-        status: 'PENDING',
+        status: 'WAITING_PAYMENT',
         expiresAt,
       },
       include: { coinToBuy: true, buyNetwork: true, payWith: true, payNetwork: true },
     });
+
+    // ⬇️ DAFTARKAN paymentAddr ke Webhook Alchemy
+    try {
+      const cfg = getEvmConfigByName(order.payNetwork.name);
+      if (cfg?.webhookId && process.env.ALCHEMY_NOTIFY_TOKEN) {
+        await addAddressesToWebhook(cfg.webhookId, [order.paymentAddr]);
+      }
+    } catch (e) {
+      console.warn('register webhook address failed:', e);
+    }
 
     // tandai wallet sudah dipakai & assign ke order
     await prisma.walletPoolLegacy.update({

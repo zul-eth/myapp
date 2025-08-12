@@ -1,0 +1,232 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this && this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (g && (g = 0, op[0] && (_ = 0)), _) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.generateAddress = void 0;
+// src/lib/hdwallet/universal.ts
+require("server-only");
+var COIN_TYPE_SLIP44 = {
+    ltc: 2,
+    doge: 3, // Dogecoin
+};
+function purposeFor(addrType) {
+    // BIP44 (44) = legacy P2PKH, BIP49 (49) = P2SH-P2WPKH, BIP84 (84) = native segwit P2WPKH
+    switch (addrType) {
+        case 'p2pkh': return 44;
+        case 'p2sh-p2wpkh': return 49;
+        case 'p2wpkh': return 84;
+        default: return 44;
+    }
+}
+function hdPathBip(purpose, coinType, index) {
+    // m / purpose' / coin_type' / account' / change / index
+    return "m/".concat(purpose, "'/").concat(coinType, "'/0'/0/").concat(index);
+}
+/**
+ * Generate address untuk beragam chain.
+ * - LTC/DOGE via BtcWallet (pilih jenis address P2PKH/P2WPKH/P2SH-P2WPKH).
+ * - EVM/TRON/SOLANA/EOS/SUI/TON sesuai pola OKX SDK.
+ */
+function generateAddress(chain, mnemonic, index, opts // hanya dipakai untuk ltc/doge
+) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
+    return __awaiter(this, void 0, Promise, function () {
+        // helper import yg tahan bundler: coba dynamic import; kalau gagal, fallback ke createRequire
+        function load(specifier) {
+            return __awaiter(this, void 0, Promise, function () {
+                var _a, createRequire, req;
+                return __generator(this, function (_b) {
+                    var _c;
+                    switch (_b.label) {
+                        case 0:
+                            _b.trys.push([0, 2, , 4]);
+                            return [4 /*yield*/, (_c = specifier, Promise.resolve().then(function () { return require(_c); }))];
+                        case 1: 
+                        // coba dynamic import biasa
+                        // @ts-ignore
+                        return [2 /*return*/, _b.sent()];
+                        case 2:
+                            _a = _b.sent();
+                            return [4 /*yield*/, Promise.resolve().then(function () { return require('module'); })];
+                        case 3:
+                            createRequire = (_b.sent()).createRequire;
+                            req = createRequire(import.meta.url);
+                            return [2 /*return*/, req(specifier)];
+                        case 4: return [2 /*return*/];
+                    }
+                });
+            });
+        }
+        var _t, mod, wallet, addrType, purpose, coinType, hdPath, privateKey, address, _u, address, mod, wallet, hdPath, privateKey, address, mod, wallet, hdPath, privateKey, address, mod, wallet, hdPath, privateKey, address, mod, wallet, hdPath, privateKey, address, mod, wallet, hdPath, privateKey, address, mod, wallet, hdPath, privateKey, address;
+        return __generator(this, function (_v) {
+            switch (_v.label) {
+                case 0:
+                    _t = chain;
+                    switch (_t) {
+                        case 'ltc': return [3 /*break*/, 1];
+                        case 'doge': return [3 /*break*/, 1];
+                        case 'evm': return [3 /*break*/, 8];
+                        case 'tron': return [3 /*break*/, 13];
+                        case 'solana': return [3 /*break*/, 18];
+                        case 'eos': return [3 /*break*/, 23];
+                        case 'sui': return [3 /*break*/, 28];
+                        case 'ton': return [3 /*break*/, 33];
+                    }
+                    return [3 /*break*/, 38];
+                case 1: return [4 /*yield*/, load('@okxweb3/coin-bitcoin')];
+                case 2:
+                    mod = _v.sent();
+                    wallet = new mod.BtcWallet();
+                    addrType = (_a = opts === null || opts === void 0 ? void 0 : opts.addressType) !== null && _a !== void 0 ? _a : 'p2pkh';
+                    purpose = purposeFor(addrType);
+                    coinType = COIN_TYPE_SLIP44[chain];
+                    hdPath = hdPathBip(purpose, coinType, index);
+                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
+                case 3:
+                    privateKey = _v.sent();
+                    _v.label = 4;
+                case 4:
+                    _v.trys.push([4, 6, , 8]);
+                    return [4 /*yield*/, wallet.getNewAddress({
+                            privateKey: privateKey,
+                            // beberapa versi SDK pakai "symbol", sebagian "network"
+                            symbol: chain.toUpperCase(),
+                            addressType: addrType, // 'p2pkh' | 'p2sh-p2wpkh' | 'p2wpkh'
+                        })];
+                case 5:
+                    address = (_v.sent()).address;
+                    return [2 /*return*/, address];
+                case 6:
+                    _u = _v.sent();
+                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privateKey })];
+                case 7:
+                    address = (_v.sent()).address;
+                    return [2 /*return*/, address];
+                case 8: return [4 /*yield*/, load('@okxweb3/coin-ethereum')];
+                case 9:
+                    mod = _v.sent();
+                    wallet = new mod.EthWallet();
+                    return [4 /*yield*/, ((_b = wallet.getDerivedPath) === null || _b === void 0 ? void 0 : _b.call(wallet, { index: index }))];
+                case 10:
+                    hdPath = (_c = _v.sent()) !== null && _c !== void 0 ? _c : "m/44'/60'/0'/0/".concat(index);
+                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
+                case 11:
+                    privateKey = _v.sent();
+                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privateKey })];
+                case 12:
+                    address = (_v.sent()).address;
+                    return [2 /*return*/, address];
+                case 13: return [4 /*yield*/, load('@okxweb3/coin-tron')];
+                case 14:
+                    mod = _v.sent();
+                    wallet = new mod.TrxWallet();
+                    return [4 /*yield*/, ((_d = wallet.getDerivedPath) === null || _d === void 0 ? void 0 : _d.call(wallet, { index: index }))];
+                case 15:
+                    hdPath = (_e = _v.sent()) !== null && _e !== void 0 ? _e : "m/44'/195'/0'/0/".concat(index);
+                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
+                case 16:
+                    privateKey = _v.sent();
+                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privateKey })];
+                case 17:
+                    address = (_v.sent()).address;
+                    return [2 /*return*/, address];
+                case 18: return [4 /*yield*/, load('@okxweb3/coin-solana')];
+                case 19:
+                    mod = _v.sent();
+                    wallet = new mod.SolWallet();
+                    return [4 /*yield*/, ((_f = wallet.getDerivedPath) === null || _f === void 0 ? void 0 : _f.call(wallet, { index: index }))];
+                case 20:
+                    hdPath = (_g = _v.sent()) !== null && _g !== void 0 ? _g : "m/44'/501'/0'/0'";
+                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
+                case 21:
+                    privateKey = _v.sent();
+                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privateKey })];
+                case 22:
+                    address = (_v.sent()).address;
+                    return [2 /*return*/, address];
+                case 23: return [4 /*yield*/, load('@okxweb3/coin-eos')];
+                case 24:
+                    mod = _v.sent();
+                    wallet = new mod.WaxWallet();
+                    return [4 /*yield*/, ((_h = wallet.getDerivedPath) === null || _h === void 0 ? void 0 : _h.call(wallet, { index: index }))];
+                case 25:
+                    hdPath = (_j = _v.sent()) !== null && _j !== void 0 ? _j : "m/44'/194'/0'/0/".concat(index);
+                    return [4 /*yield*/, ((_k = wallet.getDerivedPrivateKey) === null || _k === void 0 ? void 0 : _k.call(wallet, { mnemonic: mnemonic, hdPath: hdPath }))];
+                case 26:
+                    privateKey = _v.sent();
+                    return [4 /*yield*/, ((_l = wallet.getNewAddress) === null || _l === void 0 ? void 0 : _l.call(wallet, { privateKey: privateKey }))];
+                case 27:
+                    address = (_v.sent()).address;
+                    if (!address)
+                        throw new Error('EOS address derivation not supported by current SDK version');
+                    return [2 /*return*/, address];
+                case 28: return [4 /*yield*/, load('@okxweb3/coin-sui')];
+                case 29:
+                    mod = _v.sent();
+                    wallet = new mod.SuiWallet();
+                    return [4 /*yield*/, ((_m = wallet.getDerivedPath) === null || _m === void 0 ? void 0 : _m.call(wallet, { index: index }))];
+                case 30:
+                    hdPath = (_o = _v.sent()) !== null && _o !== void 0 ? _o : "m/44'/784'/0'/0'/".concat(index, "'");
+                    return [4 /*yield*/, wallet.getDerivedPrivateKey({ mnemonic: mnemonic, hdPath: hdPath })];
+                case 31:
+                    privateKey = _v.sent();
+                    return [4 /*yield*/, wallet.getNewAddress({ privateKey: privateKey })];
+                case 32:
+                    address = (_v.sent()).address;
+                    return [2 /*return*/, address];
+                case 33: return [4 /*yield*/, load('@okxweb3/coin-ton')];
+                case 34:
+                    mod = _v.sent();
+                    wallet = new mod.TonWallet();
+                    return [4 /*yield*/, ((_p = wallet.getDerivedPath) === null || _p === void 0 ? void 0 : _p.call(wallet, { index: index }))];
+                case 35:
+                    hdPath = (_q = _v.sent()) !== null && _q !== void 0 ? _q : "m/44'/607'/0'/0/".concat(index);
+                    return [4 /*yield*/, ((_r = wallet.getDerivedPrivateKey) === null || _r === void 0 ? void 0 : _r.call(wallet, { mnemonic: mnemonic, hdPath: hdPath }))];
+                case 36:
+                    privateKey = _v.sent();
+                    return [4 /*yield*/, ((_s = wallet.getNewAddress) === null || _s === void 0 ? void 0 : _s.call(wallet, { privateKey: privateKey }))];
+                case 37:
+                    address = (_v.sent()).address;
+                    if (!address)
+                        throw new Error('TON address derivation not supported by current SDK version');
+                    return [2 /*return*/, address];
+                case 38: throw new Error("Unsupported chain: ".concat(chain));
+            }
+        });
+    });
+}
+exports.generateAddress = generateAddress;

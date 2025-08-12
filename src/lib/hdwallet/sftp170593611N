@@ -1,7 +1,29 @@
 "use strict";
+// src/lib/hdwallet/chainMap.ts
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dbToRuntimeChain = void 0;
 function dbToRuntimeChain(dbChain) {
-    return dbChain === 'evm' ? 'eth' : dbChain;
+    switch (dbChain) {
+        case 'eth': return 'evm';
+        case 'trx': return 'tron';
+        case 'sol': return 'solana';
+        case 'litecoin': return 'ltc';
+        case 'dogecoin': return 'doge';
+        case 'wax': return 'eos';
+        case 'the-open-network': return 'ton';
+        // sudah sesuai dengan target
+        case 'evm':
+        case 'tron':
+        case 'solana':
+        case 'ltc':
+        case 'doge':
+        case 'eos':
+        case 'sui':
+        case 'ton':
+            return dbChain;
+        default:
+            // fallback (seharusnya tidak terjadi jika tipe DbChain dijaga)
+            return dbChain;
+    }
 }
 exports.dbToRuntimeChain = dbToRuntimeChain;

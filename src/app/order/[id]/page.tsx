@@ -7,22 +7,27 @@ import { getOrder, updateOrder } from '@/lib/api/orders';
 import type { OrderDTO } from '@/types/order';
 import { fmtDate, remainingLabel, statusBadgeClass, statusLabel, truncate } from '@/lib/ui/order';
 
+const EXPIRABLE_STATUSES = new Set(['WAITING_PAYMENT', 'UNDERPAID'] as const);
+const STOP_POLL_STATUSES = new Set(['COMPLETED', 'FAILED', 'EXPIRED'] as const); // tetap polling saat CONFIRMED
+
 export default function ClientOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<OrderDTO | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // tx submission (opsional agar user bisa kasih tahu hash bayarannya)
+  // tx submission (opsional)
   const [txHash, setTxHash] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // manual validate
+  const [validating, setValidating] = useState(false);
 
   // polling
   const timer = useRef<number | null>(null);
 
   async function load() {
     try {
-      setLoading(true);
       setErr(null);
       const res = await getOrder(id);
       setData(res.data);
@@ -35,25 +40,30 @@ export default function ClientOrderDetailPage() {
   }
 
   useEffect(() => {
+    setLoading(true);
     load();
-    // Poll tiap 5 detik hingga status final
-    timer.current = window.setInterval(() => {
+
+    // Poll tiap 5 detik sampai status final (COMPLETED/FAILED/EXPIRED)
+    timer.current = window.setInterval(async () => {
       setData((cur) => {
-        const final = cur && ['COMPLETED', 'FAILED', 'EXPIRED'].includes(cur.status);
-        if (!final) load();
+        const isFinal = !!cur && STOP_POLL_STATUSES.has(cur.status as any);
+        if (!isFinal) load();
         return cur;
       });
     }, 5000);
+
     return () => {
       if (timer.current) window.clearInterval(timer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const isExpirable = useMemo(() => (data ? EXPIRABLE_STATUSES.has(data.status as any) : false), [data?.status]);
+
   const expired = useMemo(() => {
-    if (!data?.expiresAt) return false;
+    if (!data?.expiresAt || !isExpirable) return false;
     return new Date(data.expiresAt).getTime() - Date.now() <= 0;
-  }, [data?.expiresAt]);
+  }, [data?.expiresAt, isExpirable]);
 
   async function saveTx() {
     if (!data) return;
@@ -66,6 +76,18 @@ export default function ClientOrderDetailPage() {
       alert(e?.message || 'Gagal menyimpan tx hash');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function validateNow() {
+    if (!data) return;
+    try {
+      setValidating(true);
+      // Endpoint ini opsional: kalau belum ada akan 404 dan diabaikan
+      await fetch(`/api/orders/${data.id}/validate`, { cache: 'no-store' }).catch(() => {});
+      await load();
+    } finally {
+      setValidating(false);
     }
   }
 
@@ -95,12 +117,24 @@ export default function ClientOrderDetailPage() {
                   {statusLabel(data.status)}
                 </span>
               </Info>
-              <Info label="Kadaluarsa">{remainingLabel(data.expiresAt)}</Info>
+              <Info label="Kadaluarsa">
+                {isExpirable && data.expiresAt ? remainingLabel(data.expiresAt) : '—'}
+              </Info>
               <Info label="Beli">{data.coinToBuy?.symbol || data.coinToBuyId}</Info>
               <Info label="Di Jaringan">{data.buyNetwork?.name || data.buyNetworkId}</Info>
               <Info label="Jumlah">{data.amount}</Info>
               <Info label="Rate">{data.priceRate}</Info>
               <Info label="Alamat Penerima" mono>{data.receivingAddr}</Info>
+              
+              {/* ➕ Tambahkan ini */}
+              {data.payoutHash ? (
+                <Info label="Payout Tx" mono>
+                  <div className="flex items-center gap-2">
+                    <span className="break-all">{data.payoutHash}</span>
+                    <CopyButton text={data.payoutHash} />
+                  </div>
+                </Info>
+              ) : null}
             </div>
           </section>
 
@@ -133,16 +167,38 @@ export default function ClientOrderDetailPage() {
               </div>
             </div>
 
-            {expired ? (
-              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                Waktu pembayaran habis. Silakan buat order baru jika ingin melanjutkan.
+            {/* Pesan status pembayaran */}
+            {isExpirable ? (
+              expired ? (
+                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  Waktu pembayaran habis. Silakan buat order baru jika ingin melanjutkan.
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-col gap-2 rounded-md border bg-gray-50 p-3 text-sm">
+                  <p>
+                    Kirim pembayaran tepat ke alamat di atas. Setelah transaksi terkirim,
+                    kamu bisa mengisi <em>Tx Hash</em> (opsional) atau klik tombol di bawah untuk cek manual.
+                  </p>
+                  <div>
+                    <button
+                      onClick={validateNow}
+                      disabled={validating}
+                      className="rounded-md border px-3 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {validating ? 'Mengecek…' : 'Cek Pembayaran Sekarang'}
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : data.status === 'WAITING_CONFIRMATION' ? (
+              <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                Pembayaran diterima. Menunggu konfirmasi jaringan…
               </div>
-            ) : (
-              <div className="mt-3 rounded-md border bg-gray-50 p-3 text-sm">
-                Kirim pembayaran tepat ke alamat di atas. Setelah transaksi terkirim,
-                kamu bisa mengisi *Tx Hash* (opsional) untuk mempercepat proses pengecekan.
+            ) : data.status === 'CONFIRMED' ? (
+              <div className="mt-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                Pembayaran <strong>terkonfirmasi</strong>. Aset akan segera dikirim ke alamat penerima.
               </div>
-            )}
+            ) : null}
           </section>
 
           {/* Tx Hash (opsional untuk user) */}
@@ -174,9 +230,7 @@ export default function ClientOrderDetailPage() {
             <Link href="/order" className="text-sm text-blue-600 hover:underline">
               ← Kembali ke My Orders
             </Link>
-            <span className="text-xs text-gray-500">
-              Terakhir diperbarui: {fmtDate(data.updatedAt)}
-            </span>
+            <span className="text-xs text-gray-500">Terakhir diperbarui: {fmtDate(data.updatedAt)}</span>
           </div>
         </div>
       )}
@@ -188,7 +242,7 @@ function Info({ label, children, mono = false }: { label: string; children: Reac
   return (
     <div className="text-sm">
       <div className="text-xs text-gray-500">{label}</div>
-      <div className={mono ? 'font-mono' : ''}>{children}</div>
+      <div className={mono ? 'font-mono break-all' : 'break-words'}>{children}</div>
     </div>
   );
 }
