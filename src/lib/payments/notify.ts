@@ -1,10 +1,16 @@
+// src/lib/payments/notify.ts
+import 'server-only';
+
 type UpdatePayload = {
   webhook_id: string;
   addresses_to_add: string[];
   addresses_to_remove: string[];
 };
 
-const ENDPOINT = 'https://dashboard.alchemy.com/api/update-webhook-addresses';
+const BASE = 'https://dashboard.alchemy.com/api';
+const ENDPOINT_PATCH = `${BASE}/update-webhook-addresses`;   // PATCH
+const ENDPOINT_PUT   = `${BASE}/update-webhook-addresses`;   // PUT (replace)
+const TOKEN = process.env.ALCHEMY_NOTIFY_TOKEN || '';
 
 function chunk<T>(arr: T[], size = 100): T[][] {
   const out: T[][] = [];
@@ -12,47 +18,74 @@ function chunk<T>(arr: T[], size = 100): T[][] {
   return out;
 }
 
-function normalize(addresses: string[]) {
-  return [...new Set((addresses || []).map(a => (a || '').toLowerCase()).filter(Boolean))];
+function uniqNormalized(addresses: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const a of addresses || []) {
+    const raw = (a || '').trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(raw); // kirim bentuk asli (Alchemy terima checksum/lowercase)
+  }
+  return out;
 }
 
-async function callAlchemy(payload: UpdatePayload, retries = 2) {
-  const token = process.env.ALCHEMY_NOTIFY_TOKEN;
-  if (!token) throw new Error('ALCHEMY_NOTIFY_TOKEN missing (Auth Token dari halaman Webhooks)');
-
-  const res = await fetch(ENDPOINT, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Alchemy-Token': token,
-    },
+async function callAlchemyPATCH(payload: UpdatePayload): Promise<any> {
+  if (!TOKEN) throw new Error('ALCHEMY_NOTIFY_TOKEN kosong');
+  const res = await fetch(ENDPOINT_PATCH, {
+    method: 'PATCH', // ⬅️ WAJIB PATCH (bukan POST)
+    headers: { 'Content-Type': 'application/json', 'X-Alchemy-Token': TOKEN },
     body: JSON.stringify(payload),
   });
-
+  const text = await res.text();
+  let json: any = null; try { json = JSON.parse(text); } catch {}
   if (!res.ok) {
-    if ((res.status === 429 || res.status >= 500) && retries > 0) {
-      await new Promise(r => setTimeout(r, 700 * (3 - retries)));
-      return callAlchemy(payload, retries - 1);
-    }
-    throw new Error(`Alchemy ${res.status}: ${await res.text()}`);
+    throw new Error(
+      `Alchemy ${res.status}: ${text || 'unknown error'} ` +
+      `(webhook_id=${payload.webhook_id}, add=${payload.addresses_to_add.length}, rem=${payload.addresses_to_remove.length})`
+    );
   }
-  try { return await res.json(); } catch { return await res.text(); }
+  console.log('Alchemy PATCH ok:', {
+    webhook_id: payload.webhook_id,
+    add: payload.addresses_to_add.length,
+    remove: payload.addresses_to_remove.length,
+    body: json ?? text,
+  });
+  return json ?? text;
+}
+
+/** Ganti SELURUH daftar alamat di webhook (lebih agresif & pasti sinkron). */
+export async function replaceWebhookAddresses(webhookId: string, addresses: string[]) {
+  if (!TOKEN) throw new Error('ALCHEMY_NOTIFY_TOKEN kosong');
+  const list = uniqNormalized(addresses);
+  const res = await fetch(ENDPOINT_PUT, {
+    method: 'PUT', // ⬅️ Replace semua alamat
+    headers: { 'Content-Type': 'application/json', 'X-Alchemy-Token': TOKEN },
+    body: JSON.stringify({ webhook_id: webhookId, addresses: list }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Alchemy ${res.status}: ${text || 'unknown error'} (replace webhook_id=${webhookId}, size=${list.length})`);
+  }
+  console.log('Alchemy PUT (replace) ok:', { webhook_id: webhookId, size: list.length, body: text });
 }
 
 export async function addAddressesToWebhook(webhookId: string, addresses: string[]) {
-  if (!webhookId) throw new Error('webhookId is empty');
-  const add = normalize(addresses);
+  if (!webhookId) throw new Error('webhookId kosong');
+  const add = uniqNormalized(addresses);
   if (!add.length) return;
   for (const batch of chunk(add, 100)) {
-    await callAlchemy({ webhook_id: webhookId, addresses_to_add: batch, addresses_to_remove: [] });
+    await callAlchemyPATCH({ webhook_id: webhookId, addresses_to_add: batch, addresses_to_remove: [] });
   }
 }
 
 export async function removeAddressesFromWebhook(webhookId: string, addresses: string[]) {
-  if (!webhookId) throw new Error('webhookId is empty');
-  const rem = normalize(addresses);
+  if (!webhookId) throw new Error('webhookId kosong');
+  const rem = uniqNormalized(addresses);
   if (!rem.length) return;
   for (const batch of chunk(rem, 100)) {
-    await callAlchemy({ webhook_id: webhookId, addresses_to_add: [], addresses_to_remove: batch });
+    await callAlchemyPATCH({ webhook_id: webhookId, addresses_to_add: [], addresses_to_remove: batch });
   }
 }

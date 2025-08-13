@@ -1,4 +1,5 @@
 // src/app/api/orders/[id]/deliver/route.ts
+import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient, ChainFamily } from '@prisma/client';
 import { JsonRpcProvider, Wallet, Contract, parseUnits } from 'ethers';
@@ -33,8 +34,9 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
         payNetwork: true,
       },
     });
-    if (!order) {
-      return NextResponse.json({ message: 'Order not found' }, { status: 404 });
+    if (!order) return NextResponse.json({ message: 'Order not found' }, { status: 404 });
+    if (!order.receivingAddr) {
+      return NextResponse.json({ message: 'Receiving address missing' }, { status: 400 });
     }
 
     // Idempotent guard
@@ -58,7 +60,7 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
       );
     }
 
-    // 2) Metadata aset yang DIKIRIM (coinToBuy pada buyNetwork) — sumber kebenaran: CoinNetwork
+    // 2) Metadata aset yang DIKIRIM (coinToBuy pada buyNetwork)
     const cn = await prisma.coinNetwork.findFirst({
       where: { coinId: order.coinToBuyId, networkId: order.buyNetworkId },
       select: {
@@ -70,13 +72,10 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
         network: { select: { family: true, name: true } },
       },
     });
-    if (!cn) {
-      return NextResponse.json({ message: 'CoinNetwork metadata not found' }, { status: 400 });
-    }
+    if (!cn) return NextResponse.json({ message: 'CoinNetwork metadata not found' }, { status: 400 });
 
-    // 3) Validasi memo/tag bila diperlukan oleh pasangan (coin,network)
+    // 3) Validasi memo/tag bila diperlukan
     if (cn.memoKind && cn.memoKind !== 'NONE') {
-      // receivingMemo ada di model Order (opsional)
       const memo = order.receivingMemo ?? null;
       if (!memo || `${memo}`.length === 0) {
         return NextResponse.json(
@@ -125,7 +124,7 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
           );
         }
 
-        // 6) Hitung jumlah payout (pakai amount yang dibeli)
+        // 6) Hitung jumlah payout
         const amountStr = toFixedStr(Number(order.amount), decimals);
 
         // 7) Kirim payout
@@ -138,9 +137,7 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
           if (!rc) throw new Error('Native payout tx not confirmed');
         } else {
           const contract = new Contract(contractAddr!, ERC20_ABI, wallet);
-          if (!cn.decimals) {
-            decimals = Number(await contract.decimals());
-          }
+          if (!cn.decimals) decimals = Number(await contract.decimals());
           const value = parseUnits(amountStr, decimals);
           const bal = await contract.balanceOf(from);
           if (bal < value) {
@@ -155,18 +152,16 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
         // 8) Simpan hash & tandai selesai
         await prisma.order.update({
           where: { id },
-          data: {
-            status: 'COMPLETED',
-            payoutHash: txHash,
-            // payoutAt sudah di-set saat lock
-          },
+          data: { status: 'COMPLETED', payoutHash: txHash },
         });
 
-        // 9) (Opsional) bersihkan alamat pantauan di PAY network (alamat pembayaran)
+        // 9) CABUT alamat pantauan di PAY network (sinkron dengan notify terbaru: PATCH)
+        //    Hanya jika webhook aktif & token tersedia; non-blocking.
         queueMicrotask(() => {
           try {
             const payCfg = getEvmConfigByName(order.payNetwork.name);
-            if (payCfg?.webhookId && process.env.ALCHEMY_NOTIFY_TOKEN) {
+            const enabled = process.env.ALCHEMY_WEBHOOK_ENABLED === 'true';
+            if (enabled && payCfg?.webhookId && process.env.ALCHEMY_NOTIFY_TOKEN && order.paymentAddr) {
               void removeAddressesFromWebhook(payCfg.webhookId, [order.paymentAddr]);
             }
           } catch {
@@ -180,15 +175,8 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
         });
       }
 
-      // Non‑EVM: untuk sekarang belum diimplementasikan (native only nanti)
-      case ChainFamily.TRON:
-      case ChainFamily.SOLANA:
-      case ChainFamily.EOS:
-      case ChainFamily.XRP:
-      case ChainFamily.DOGE:
-      case ChainFamily.SUI:
-      case ChainFamily.LTC:
-      case ChainFamily.TON: {
+      // Non‑EVM: belum diimplementasikan
+      default: {
         return NextResponse.json(
           { message: `${cn.network.family} payout belum diimplementasikan` },
           { status: 400 },
@@ -200,4 +188,3 @@ export async function POST(_req: NextRequest, { params }: Params<{ id: string }>
     return NextResponse.json({ message: e?.message || 'Internal server error' }, { status: 500 });
   }
 }
-```0

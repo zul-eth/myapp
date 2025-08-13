@@ -1,16 +1,15 @@
-/** @type {import('next').NextConfig} */
+var _a;
+// next.config.ts (refactor)
+var allowed = ((_a = process.env.NEXT_PUBLIC_BASE_URL) !== null && _a !== void 0 ? _a : '')
+    .split(',')
+    .map(function (s) { return s.trim(); })
+    .filter(Boolean);
 var nextConfig = {
     experimental: {
         serverActions: {
-            // Izinkan panggilan Server Actions dari origin admin kamu
-            // Catatan: pakai host:port (tanpa protocol) sesuai header Origin yang diteruskan proxy
-            allowedOrigins: ['52.230.96.30:3000'],
+            allowedOrigins: allowed,
         },
     },
-    // (opsional) Kalau kamu butuh memastikan semua file actions/services berjalan di Node runtime
-    // appDir: true, // default Next.js 13+/14+/15
-    // modularizeImports: {},
-    // (opsional) Strict mode/typed routes, dll.
     reactStrictMode: true,
 };
 module.exports = nextConfig;
