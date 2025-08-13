@@ -65,5 +65,5 @@ Entity Method Endpoint Fungsi
 
 
 # payment metod
-- evm  native & erc20 token (eth, base, op, arb ,pol, bnb | usdt,usdc,dai)
+- evm  native & erc20 (eth, base, op, arb ,pol, bnb | usdt,usdc,dai)
 - tron, solana, eos, xrp, doge, sui, ltc, ton

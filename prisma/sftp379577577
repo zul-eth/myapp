@@ -1,3 +1,4 @@
+"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -34,69 +35,132 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-var PrismaClient = require('@prisma/client').PrismaClient;
-var prisma = new PrismaClient();
+Object.defineProperty(exports, "__esModule", { value: true });
+var client_1 = require("@prisma/client");
+var prisma = new client_1.PrismaClient();
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var eth, shib;
+        var coins, bySymbol, nets, netByName, entries, ERC20, _i, entries_1, e;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, prisma.network.upsert({
-                        where: { name: 'Ethereum' },
-                        update: {},
-                        create: {
-                            name: 'Ethereum',
-                            logoUrl: 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
-                        }
-                    })];
+                case 0: return [4 /*yield*/, Promise.all([
+                        ['ETH', 'Ether'], ['USDT', 'Tether USD'], ['USDC', 'USD Coin'], ['DAI', 'Dai'],
+                        ['TRX', 'TRON'], ['SOL', 'Solana'], ['XRP', 'XRP'],
+                        ['DOGE', 'Dogecoin'], ['LTC', 'Litecoin'], ['TON', 'Toncoin'],
+                        ['SUI', 'Sui'], ['EOS', 'EOS'], ['MATIC', 'Polygon'], ['BNB', 'BNB']
+                    ].map(function (_a) {
+                        var symbol = _a[0], name = _a[1];
+                        return prisma.coin.upsert({
+                            where: { symbol: symbol }, update: {}, create: { symbol: symbol, name: name }
+                        });
+                    }))];
                 case 1:
-                    eth = _a.sent();
-                    return [4 /*yield*/, prisma.coin.upsert({
-                            where: { symbol: 'SHIB' },
-                            update: {},
-                            create: {
-                                symbol: 'SHIB',
-                                name: 'Shiba Inu',
-                                logoUrl: 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png',
-                            }
-                        })];
+                    coins = _a.sent();
+                    bySymbol = function (s) { return coins.find(function (c) { return c.symbol === s; }); };
+                    return [4 /*yield*/, Promise.all([
+                            { name: 'ETHEREUM', family: client_1.ChainFamily.EVM, chainId: '1', symbol: 'ETH' },
+                            { name: 'BASE', family: client_1.ChainFamily.EVM, chainId: '8453', symbol: 'ETH' },
+                            { name: 'OPTIMISM', family: client_1.ChainFamily.EVM, chainId: '10', symbol: 'ETH' },
+                            { name: 'ARBITRUM', family: client_1.ChainFamily.EVM, chainId: '42161', symbol: 'ETH' },
+                            { name: 'POLYGON', family: client_1.ChainFamily.EVM, chainId: '137', symbol: 'MATIC' },
+                            { name: 'BSC', family: client_1.ChainFamily.EVM, chainId: '56', symbol: 'BNB' },
+                            { name: 'TRON', family: client_1.ChainFamily.TRON, symbol: 'TRX' },
+                            { name: 'SOLANA', family: client_1.ChainFamily.SOLANA, symbol: 'SOL' },
+                            { name: 'XRP', family: client_1.ChainFamily.XRP, symbol: 'XRP' },
+                            { name: 'DOGE', family: client_1.ChainFamily.DOGE, symbol: 'DOGE' },
+                            { name: 'LTC', family: client_1.ChainFamily.LTC, symbol: 'LTC' },
+                            { name: 'TON', family: client_1.ChainFamily.TON, symbol: 'TON' },
+                            { name: 'SUI', family: client_1.ChainFamily.SUI, symbol: 'SUI' },
+                            { name: 'EOS', family: client_1.ChainFamily.EOS, symbol: 'EOS' },
+                        ].map(function (n) { return prisma.network.upsert({ where: { name: n.name }, update: {}, create: n }); }))];
                 case 2:
-                    shib = _a.sent();
-                    return [4 /*yield*/, prisma.coinNetwork.upsert({
-                            where: {
-                                coinId_networkId: {
-                                    coinId: shib.id,
-                                    networkId: eth.id
-                                }
-                            },
+                    nets = _a.sent();
+                    netByName = function (n) { return nets.find(function (x) { return x.name === n; }); };
+                    entries = [];
+                    // EVM Native
+                    ['ETHEREUM', 'BASE', 'OPTIMISM', 'ARBITRUM', 'POLYGON', 'BSC'].forEach(function (n) {
+                        var sym = n === 'POLYGON' ? 'MATIC' : (n === 'BSC' ? 'BNB' : 'ETH');
+                        entries.push({
+                            where: { coinId_networkId: { coinId: bySymbol(sym).id, networkId: netByName(n).id } },
+                            update: {},
+                            create: { coinId: bySymbol(sym).id, networkId: netByName(n).id, assetType: client_1.AssetType.NATIVE, decimals: 18 }
+                        });
+                    });
+                    ERC20 = [
+                        // [symbol, network, contract, decimals]
+                        ['USDT', 'ETHEREUM', '0xdAC17F958D2ee523a2206206994597C13D831ec7', 6],
+                        ['USDC', 'ETHEREUM', '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', 6],
+                        ['DAI', 'ETHEREUM', '0x6B175474E89094C44Da98b954EedeAC495271d0F', 18],
+                        // Tambahkan BASE/OP/ARB/POL/BSC kontrak sesuai real data mu
+                    ];
+                    ERC20.forEach(function (_a) {
+                        var sym = _a[0], net = _a[1], addr = _a[2], dec = _a[3];
+                        entries.push({
+                            where: { coinId_networkId: { coinId: bySymbol(sym).id, networkId: netByName(net).id } },
                             update: {},
                             create: {
-                                coinId: shib.id,
-                                networkId: eth.id,
-                                isActive: true
+                                coinId: bySymbol(sym).id, networkId: netByName(net).id,
+                                assetType: client_1.AssetType.EVM_ERC20, contractAddress: addr, decimals: dec
                             }
-                        })];
+                        });
+                    });
+                    // Non‑EVM Native only
+                    [
+                        ['TRX', 'TRON', 6, client_1.MemoKind.NONE],
+                        ['SOL', 'SOLANA', 9, client_1.MemoKind.NONE],
+                        ['XRP', 'XRP', 6, client_1.MemoKind.XRP_TAG],
+                        ['DOGE', 'DOGE', 8, client_1.MemoKind.NONE],
+                        ['LTC', 'LTC', 8, client_1.MemoKind.NONE],
+                        ['TON', 'TON', 9, client_1.MemoKind.TON_TEXT],
+                        ['SUI', 'SUI', 9, client_1.MemoKind.NONE],
+                        ['EOS', 'EOS', 4, client_1.MemoKind.EOS_TEXT], // memo text
+                    ].forEach(function (_a) {
+                        var sym = _a[0], net = _a[1], dec = _a[2], memo = _a[3];
+                        entries.push({
+                            where: { coinId_networkId: { coinId: bySymbol(sym).id, networkId: netByName(net).id } },
+                            update: {},
+                            create: {
+                                coinId: bySymbol(sym).id, networkId: netByName(net).id,
+                                assetType: client_1.AssetType.NATIVE, decimals: dec,
+                                memoKind: memo,
+                                memoLabel: memo === client_1.MemoKind.XRP_TAG ? 'Destination tag' :
+                                    memo === client_1.MemoKind.EOS_TEXT ? 'Memo' :
+                                        memo === client_1.MemoKind.TON_TEXT ? 'Comment' : undefined
+                            }
+                        });
+                    });
+                    _i = 0, entries_1 = entries;
+                    _a.label = 3;
                 case 3:
-                    _a.sent();
-                    return [4 /*yield*/, prisma.paymentOption.create({
-                            data: {
-                                coinId: shib.id,
-                                networkId: eth.id,
-                                isActive: true
-                            }
-                        })];
+                    if (!(_i < entries_1.length)) return [3 /*break*/, 6];
+                    e = entries_1[_i];
+                    return [4 /*yield*/, prisma.coinNetwork.upsert(e)];
                 case 4:
                     _a.sent();
-                    console.log('Seed selesai 🚀');
+                    _a.label = 5;
+                case 5:
+                    _i++;
+                    return [3 /*break*/, 3];
+                case 6: 
+                // PaymentOption operasional (contoh aktifkan ETH & USDT di BASE)
+                return [4 /*yield*/, prisma.paymentOption.upsert({
+                        where: { coinId_networkId: { coinId: bySymbol('ETH').id, networkId: netByName('BASE').id } },
+                        update: { isActive: true },
+                        create: { coinId: bySymbol('ETH').id, networkId: netByName('BASE').id, isActive: true }
+                    })];
+                case 7:
+                    // PaymentOption operasional (contoh aktifkan ETH & USDT di BASE)
+                    _a.sent();
+                    return [4 /*yield*/, prisma.paymentOption.upsert({
+                            where: { coinId_networkId: { coinId: bySymbol('USDT').id, networkId: netByName('BASE').id } },
+                            update: { isActive: true },
+                            create: { coinId: bySymbol('USDT').id, networkId: netByName('BASE').id, isActive: true }
+                        })];
+                case 8:
+                    _a.sent();
                     return [2 /*return*/];
             }
         });
     });
 }
-main()
-    .then(function () { return prisma.$disconnect(); })
-    .catch(function (e) {
-    console.error(e);
-    prisma.$disconnect();
-    process.exit(1);
-});
+main().finally(function () { return prisma.$disconnect(); });

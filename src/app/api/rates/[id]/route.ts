@@ -3,15 +3,17 @@ import { PrismaClient } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 const prisma = new PrismaClient();
+type Params<T> = { params: Promise<T> };
 
 /**
- * PUT /api/rates/:id
+ * PUT /api/rates/[id]
  * body: { rate?: number, updatedBy?: string }
  */
-export async function PUT(req: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function PUT(req: NextRequest, { params }: Params<{ id: string }>) {
+  const { id } = await params; // ✅ wajib await
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as any));
+
     const actor =
       body?.updatedBy ||
       req.headers.get('x-actor') ||
@@ -51,10 +53,10 @@ export async function PUT(req: NextRequest, context: { params: { id: string } })
 }
 
 /**
- * DELETE /api/rates/:id
+ * DELETE /api/rates/[id]
  */
-export async function DELETE(_req: NextRequest, context: { params: { id: string } }) {
-  const { id } = context.params;
+export async function DELETE(_req: NextRequest, { params }: Params<{ id: string }>) {
+  const { id } = await params; // ✅ wajib await
   try {
     await prisma.exchangeRate.delete({ where: { id } });
     return NextResponse.json({ message: 'Rate deleted' });

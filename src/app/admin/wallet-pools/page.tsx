@@ -1,207 +1,200 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import type { WalletPool } from '@/types/walletPool';
-import { getWalletPools, deriveWallets, updateWalletPool, deleteWalletPool } from '@/lib/api/walletPool';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import type { WalletPoolRow } from '@/lib/api/walletPool';
+import {
+  listWalletPoolsAction,
+  deriveWalletsAction,
+  previewDerivedAddressAction,
+} from '@/server/actions/wallets';
+
+type Chain = 'evm' | 'tron' | 'solana';
 
 export default function WalletPoolsAdminPage() {
-  const [rows, setRows] = useState<WalletPool[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  // filter
-  const [chain, setChain] = useState<'' | 'evm' | 'tron' | 'solana'>('');
-  const [isUsed, setIsUsed] = useState<'all' | 'true' | 'false'>('all');
-  const [q, setQ] = useState('');
-  const [count, setCount] = useState(1);
+  const [chain, setChain] = useState<Chain>('evm');
+  const [rows, setRows] = useState<WalletPoolRow[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [cursor, setCursor] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true); setErr(null);
-    try {
-      const list = await getWalletPools({
-        chain: chain || undefined,
-        isUsed: isUsed === 'all' ? undefined : isUsed,
-        q: q || undefined,
-        limit: 200,
-      });
-      setRows(list);
-    } catch (e: any) {
-      setErr(e?.message || 'Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
+  const [count, setCount] = useState<number>(10);
+  const [previewIndex, setPreviewIndex] = useState<number>(0);
+  const [preview, setPreview] = useState<{ chain: string; index: number; address: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const canLoadMore = useMemo(() => rows.length < total, [rows.length, total]);
+
+  // initial load & when chain changes
+  useEffect(() => {
+    setRows([]);
+    setCursor(null);
+    setTotal(0);
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await listWalletPoolsAction({ chain, take: 50, cursor: null });
+        setRows(res.rows as any);
+        setTotal(res.total);
+        setCursor(res.nextCursor);
+      } catch (e: any) {
+        setError(e?.message ?? 'Gagal memuat data');
+      }
+    });
+  }, [chain]);
+
+  const loadMore = () => {
+    if (!canLoadMore || pending) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await listWalletPoolsAction({ chain, take: 50, cursor });
+        setRows(prev => [...prev, ...(res.rows as any)]);
+        setTotal(res.total);
+        setCursor(res.nextCursor);
+      } catch (e: any) {
+        setError(e?.message ?? 'Gagal memuat data');
+      }
+    });
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
-
-  const visible = useMemo(() => rows, [rows]);
-
-  const handleGenerate = async () => {
-    if (!chain) return alert('Pilih chain');
-    await deriveWallets({ chain, count });
-    await load();
+  const handleGenerate = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deriveWalletsAction({ chain, count });
+        // reload dari awal agar urutan terbaru muncul di atas
+        const res = await listWalletPoolsAction({ chain, take: 50, cursor: null });
+        setRows(res.rows as any);
+        setTotal(res.total);
+        setCursor(res.nextCursor);
+      } catch (e: any) {
+        setError(e?.message ?? 'Gagal generate address');
+      }
+    });
   };
 
-  const handleToggleUsed = async (row: WalletPool) => {
-    await updateWalletPool(row.id, { isUsed: !row.isUsed, assignedOrder: !row.isUsed ? row.assignedOrder ?? '' : null });
-    await load();
-  };
-
-  const handleAssign = async (row: WalletPool, assignedOrder: string | null) => {
-    await updateWalletPool(row.id, { assignedOrder });
-    await load();
-  };
-
-  const handleDelete = async (row: WalletPool) => {
-    if (!confirm(`Hapus ${row.address}?`)) return;
-    await deleteWalletPool(row.id);
-    await load();
+  const handlePreview = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await previewDerivedAddressAction({ chain, index: previewIndex });
+        setPreview(res);
+      } catch (e: any) {
+        setError(e?.message ?? 'Gagal preview address');
+      }
+    });
   };
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">Admin · Wallet Ledger</h1>
-          <p className="text-sm text-gray-500">Ledger per-chain (HdCursor). Alokasi address otomatis saat membuat order.</p>
-        </div>
-        <button className="rounded-lg border px-4 py-2 text-sm" onClick={load} disabled={loading}>
-          Refresh
-        </button>
-      </div>
+      <h1 className="text-xl font-semibold">Wallet Pools</h1>
 
-      {err && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">{err}</div>}
-
-      {/* Filter + Generator */}
-      <div className="rounded-xl border p-4 grid grid-cols-1 md:grid-cols-5 gap-3">
-        <select className="rounded-lg border px-3 py-2" value={chain} onChange={(e) => setChain(e.target.value as any)}>
-          <option value="">Semua Chain</option>
-          <option value="evm">EVM</option>
-          <option value="tron">TRON</option>
-          <option value="solana">Solana</option>
-        </select>
-        <select className="rounded-lg border px-3 py-2" value={isUsed} onChange={(e) => setIsUsed(e.target.value as any)}>
-          <option value="all">Semua (used & unused)</option>
-          <option value="false">Hanya Unused</option>
-          <option value="true">Hanya Used</option>
-        </select>
-        <input className="rounded-lg border px-3 py-2" placeholder="Cari (address/OrderID/ID)" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="flex gap-2">
-          <button className="rounded-lg border px-4 py-2" onClick={load} disabled={loading}>Terapkan</button>
-          <button className="rounded-lg border px-4 py-2" onClick={() => { setChain(''); setIsUsed('all'); setQ(''); setTimeout(load, 0); }}>Reset</button>
-        </div>
+      <div className="grid gap-3 md:grid-cols-3">
         <div className="flex items-center gap-2">
-          <input type="number" min={1} max={100} className="rounded-lg border px-3 py-2 w-24" value={count} onChange={(e) => setCount(Number(e.target.value))} />
-          <button className="rounded-lg bg-black text-white px-4 py-2 disabled:opacity-50" onClick={handleGenerate} disabled={loading || !chain}>
-            Generate {count}
+          <label className="w-24">Chain</label>
+          <select
+            className="border rounded px-2 py-1 bg-transparent"
+            value={chain}
+            onChange={(e) => setChain(e.target.value as Chain)}
+          >
+            <option value="evm">EVM</option>
+            <option value="tron">TRON</option>
+            <option value="solana">Solana</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="w-24">Derive</label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            className="border rounded px-2 py-1 w-24 bg-transparent"
+            value={count}
+            onChange={(e) => setCount(Number(e.target.value))}
+          />
+          <button
+            className="px-3 py-1 rounded border"
+            disabled={pending}
+            onClick={handleGenerate}
+          >
+            {pending ? 'Generating...' : 'Generate'}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="w-24">Preview idx</label>
+          <input
+            type="number"
+            min={0}
+            className="border rounded px-2 py-1 w-24 bg-transparent"
+            value={previewIndex}
+            onChange={(e) => setPreviewIndex(Number(e.target.value))}
+          />
+          <button
+            className="px-3 py-1 rounded border"
+            disabled={pending}
+            onClick={handlePreview}
+          >
+            {pending ? 'Checking...' : 'Preview'}
           </button>
         </div>
       </div>
 
-      <WalletLedgerTable rows={visible} reloading={loading} onToggleUsed={handleToggleUsed} onAssign={handleAssign} onDelete={handleDelete} />
-    </div>
-  );
-}
+      {preview && (
+        <div className="text-xs border rounded p-3 overflow-x-auto">
+          <div className="font-medium mb-1">Preview</div>
+          <pre>{JSON.stringify(preview, null, 2)}</pre>
+        </div>
+      )}
 
-// --- Table component (inline biar 1 file) ---
-function WalletLedgerTable({
-  rows,
-  reloading,
-  onToggleUsed,
-  onAssign,
-  onDelete,
-}: {
-  rows: WalletPool[];
-  reloading?: boolean;
-  onToggleUsed: (row: WalletPool) => Promise<void> | void;
-  onAssign: (row: WalletPool, assignedOrder: string | null) => Promise<void> | void;
-  onDelete: (row: WalletPool) => Promise<void> | void;
-}) {
-  const [workingId, setWorkingId] = useState<string | null>(null);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
-  const [assignValue, setAssignValue] = useState('');
-
-  const beginAssign = (r: WalletPool) => { setAssigningId(r.id); setAssignValue(r.assignedOrder || ''); };
-  const cancelAssign = () => { setAssigningId(null); setAssignValue(''); };
-  const saveAssign = async (r: WalletPool) => {
-    setWorkingId(r.id);
-    try { await onAssign(r, assignValue.trim() || null); cancelAssign(); }
-    finally { setWorkingId(null); }
-  };
-
-  return (
-    <div className="rounded-xl border">
-      <div className="flex items-center justify-between px-4 py-3">
-        <h2 className="font-medium">Ledger</h2>
-        {reloading && <span className="text-sm text-gray-500">Memuat...</span>}
+      <div className="flex items-center justify-between">
+        <div className="text-sm opacity-80">
+          Showing {rows.length} of {total} {chain.toUpperCase()} addresses
+        </div>
+        <button
+          className="px-3 py-1 rounded border"
+          onClick={loadMore}
+          disabled={!canLoadMore || pending}
+        >
+          {pending ? 'Loading...' : (canLoadMore ? 'Load more' : 'No more')}
+        </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left">
+      {error && <div className="text-red-500 text-sm">{error}</div>}
+
+      <div className="border rounded overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-900">
             <tr>
-              <th className="px-4 py-2">Chain</th>
-              <th className="px-4 py-2">Index</th>
-              <th className="px-4 py-2">Address</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Assigned Order</th>
-              <th className="px-4 py-2">Dibuat</th>
-              <th className="px-4 py-2 text-right">Aksi</th>
+              <th className="text-left p-2">Created</th>
+              <th className="text-left p-2">Chain</th>
+              <th className="text-left p-2">Index</th>
+              <th className="text-left p-2">Address</th>
+              <th className="text-left p-2">Used</th>
+              <th className="text-left p-2">Assigned</th>
+              <th className="text-left p-2">ID</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">Belum ada data</td></tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="px-4 py-2 uppercase">{r.chain}</td>
-                  <td className="px-4 py-2 font-mono">{r.derivationIndex}</td>
-                  <td className="px-4 py-2 break-all font-mono">{r.address}</td>
-                  <td className="px-4 py-2">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${r.isUsed ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-700'}`}>
-                      {r.isUsed ? 'Used' : 'Unused'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 break-all">
-                    {assigningId === r.id ? (
-                      <div className="flex items-center gap-2">
-                        <input className="rounded-lg border px-2 py-1 w-48" value={assignValue} onChange={(e) => setAssignValue(e.target.value)} placeholder="Order ID (opsional)" />
-                        <button className="rounded-lg border px-3 py-1 text-xs" onClick={() => saveAssign(r)} disabled={workingId === r.id}>Simpan</button>
-                        <button className="rounded-lg border px-3 py-1 text-xs" onClick={cancelAssign}>Batal</button>
-                      </div>
-                    ) : (
-                      <span className="font-mono text-xs">{r.assignedOrder || '-'}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">{r.createdAt ? new Date(r.createdAt).toLocaleString() : '-'}</td>
-                  <td className="px-4 py-2">
-                    <div className="flex gap-2 justify-end">
-                      {assigningId === r.id ? null : (
-                        <button className="rounded-lg border px-3 py-1 text-xs" onClick={() => beginAssign(r)}>
-                          Assign Order
-                        </button>
-                      )}
-                      <button
-                        className="rounded-lg border px-3 py-1 text-xs disabled:opacity-50"
-                        onClick={async () => { setWorkingId(r.id); try { await onToggleUsed(r); } finally { setWorkingId(null); } }}
-                        disabled={workingId === r.id}
-                        title={r.isUsed ? 'Set Unused' : 'Set Used'}
-                      >
-                        {workingId === r.id ? '...' : r.isUsed ? 'Set Unused' : 'Set Used'}
-                      </button>
-                      <button
-                        className="rounded-lg border px-3 py-1 text-xs disabled:opacity-50"
-                        onClick={() => onDelete(r)}
-                        disabled={r.isUsed || workingId === r.id}
-                        title={r.isUsed ? 'Tidak bisa hapus yang digunakan' : 'Hapus'}
-                      >
-                        Hapus
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+            {rows.map((r) => (
+              <tr key={r.id} className="border-t border-zinc-800">
+                <td className="p-2">{new Date(r.createdAt).toLocaleString()}</td>
+                <td className="p-2">{r.chain}</td>
+                <td className="p-2">{r.derivationIndex}</td>
+                <td className="p-2 font-mono">{r.address}</td>
+                <td className="p-2">{r.isUsed ? 'Yes' : 'No'}</td>
+                <td className="p-2">{r.assignedOrder ?? '-'}</td>
+                <td className="p-2 font-mono opacity-70">{r.id}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td className="p-6 text-center opacity-70" colSpan={7}>
+                  No data
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

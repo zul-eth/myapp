@@ -1,4 +1,8 @@
 "use strict";
+var __makeTemplateObject = (this && this.__makeTemplateObject) || function (cooked, raw) {
+    if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+    return cooked;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -52,125 +56,175 @@ var ERC20_ABI = [
 function toFixedStr(n, decimals) {
     return (Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
 }
-function POST(_req, ctx) {
-    var _a, _b;
+function POST(_req, _a) {
+    var _b, _c, _d, _e, _f;
+    var params = _a.params;
     return __awaiter(this, void 0, void 0, function () {
-        var id, order_1, buyCfg, provider, wallet, from, buyOpt, isToken, decimals, contractAddr, lock, fresh, amountStr, txHash, value, tx, rc, contract, _c, value, bal, tx, rc, e_1;
-        return __generator(this, function (_d) {
-            switch (_d.label) {
+        var id, order_1, cn, memo, _g, buyCfg, provider, wallet, from, isToken, decimals, contractAddr, lock, fresh, amountStr, txHash, value, tx, rc, contract, _h, value, bal, tx, rc, e_1;
+        return __generator(this, function (_j) {
+            switch (_j.label) {
                 case 0:
-                    _d.trys.push([0, 20, , 21]);
-                    return [4 /*yield*/, ctx.params];
+                    _j.trys.push([0, 23, , 24]);
+                    return [4 /*yield*/, params];
                 case 1:
-                    id = (_d.sent()).id;
+                    id = (_j.sent()).id;
                     return [4 /*yield*/, prisma.order.findUnique({
                             where: { id: id },
-                            include: { coinToBuy: true, buyNetwork: true, payWith: true, payNetwork: true },
+                            include: {
+                                coinToBuy: true,
+                                buyNetwork: true,
+                                payWith: true,
+                                payNetwork: true,
+                            },
                         })];
                 case 2:
-                    order_1 = _d.sent();
-                    if (!order_1)
+                    order_1 = _j.sent();
+                    if (!order_1) {
                         return [2 /*return*/, server_1.NextResponse.json({ message: 'Order not found' }, { status: 404 })];
+                    }
                     // Idempotent guard
                     if (order_1.status === 'COMPLETED') {
-                        return [2 /*return*/, server_1.NextResponse.json({ message: 'Already completed', data: { payoutHash: (_a = order_1.payoutHash) !== null && _a !== void 0 ? _a : null } })];
+                        return [2 /*return*/, server_1.NextResponse.json({
+                                message: 'Already completed',
+                                data: { payoutHash: (_b = order_1.payoutHash) !== null && _b !== void 0 ? _b : null },
+                            })];
                     }
                     if (!order_1.payoutHash) return [3 /*break*/, 4];
                     return [4 /*yield*/, prisma.order.update({ where: { id: id }, data: { status: 'COMPLETED' } })];
                 case 3:
-                    _d.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Marked completed (hash existed)', data: { payoutHash: order_1.payoutHash } })];
+                    _j.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({
+                            message: 'Marked completed (hash existed)',
+                            data: { payoutHash: order_1.payoutHash },
+                        })];
                 case 4:
                     if (order_1.status !== 'CONFIRMED') {
                         return [2 /*return*/, server_1.NextResponse.json({ message: "Order status must be CONFIRMED to deliver (current: ".concat(order_1.status, ")") }, { status: 400 })];
                     }
-                    buyCfg = (0, networkMap_1.getEvmConfigByName)(order_1.buyNetwork.name);
-                    if (!(buyCfg === null || buyCfg === void 0 ? void 0 : buyCfg.rpc))
+                    return [4 /*yield*/, prisma.coinNetwork.findFirst({
+                            where: { coinId: order_1.coinToBuyId, networkId: order_1.buyNetworkId },
+                            select: {
+                                assetType: true,
+                                contractAddress: true,
+                                decimals: true,
+                                memoKind: true,
+                                memoLabel: true,
+                                network: { select: { family: true, name: true } },
+                            },
+                        })];
+                case 5:
+                    cn = _j.sent();
+                    if (!cn) {
+                        return [2 /*return*/, server_1.NextResponse.json({ message: 'CoinNetwork metadata not found' }, { status: 400 })];
+                    }
+                    // 3) Validasi memo/tag bila diperlukan oleh pasangan (coin,network)
+                    if (cn.memoKind && cn.memoKind !== 'NONE') {
+                        memo = (_c = order_1.receivingMemo) !== null && _c !== void 0 ? _c : null;
+                        if (!memo || "".concat(memo).length === 0) {
+                            return [2 /*return*/, server_1.NextResponse.json({ message: "".concat((_d = cn.memoLabel) !== null && _d !== void 0 ? _d : 'Memo/Tag', " diperlukan untuk network ini") }, { status: 400 })];
+                        }
+                    }
+                    _g = cn.network.family;
+                    switch (_g) {
+                        case client_1.ChainFamily.EVM: return [3 /*break*/, 6];
+                        case client_1.ChainFamily.TRON: return [3 /*break*/, 21];
+                        case client_1.ChainFamily.SOLANA: return [3 /*break*/, 21];
+                        case client_1.ChainFamily.EOS: return [3 /*break*/, 21];
+                        case client_1.ChainFamily.XRP: return [3 /*break*/, 21];
+                        case client_1.ChainFamily.DOGE: return [3 /*break*/, 21];
+                        case client_1.ChainFamily.SUI: return [3 /*break*/, 21];
+                        case client_1.ChainFamily.LTC: return [3 /*break*/, 21];
+                        case client_1.ChainFamily.TON: return [3 /*break*/, 21];
+                    }
+                    return [3 /*break*/, 22];
+                case 6:
+                    buyCfg = (0, networkMap_1.getEvmConfigByName)(cn.network.name);
+                    if (!(buyCfg === null || buyCfg === void 0 ? void 0 : buyCfg.rpc)) {
                         return [2 /*return*/, server_1.NextResponse.json({ message: 'BUY network RPC missing' }, { status: 400 })];
-                    if (!(buyCfg === null || buyCfg === void 0 ? void 0 : buyCfg.payoutPk))
+                    }
+                    if (!(buyCfg === null || buyCfg === void 0 ? void 0 : buyCfg.payoutPk)) {
                         return [2 /*return*/, server_1.NextResponse.json({ message: 'Payout private key missing for BUY network' }, { status: 400 })];
+                    }
                     provider = new ethers_1.JsonRpcProvider(buyCfg.rpc);
                     wallet = new ethers_1.Wallet(buyCfg.payoutPk, provider);
                     return [4 /*yield*/, wallet.getAddress()];
-                case 5:
-                    from = _d.sent();
-                    return [4 /*yield*/, prisma.paymentOption.findFirst({
-                            where: { coinId: order_1.coinToBuyId, networkId: order_1.buyNetworkId },
-                            select: { contractAddress: true, decimals: true },
-                        })];
-                case 6:
-                    buyOpt = _d.sent();
-                    isToken = !!(buyOpt === null || buyOpt === void 0 ? void 0 : buyOpt.contractAddress);
-                    decimals = Number((buyOpt === null || buyOpt === void 0 ? void 0 : buyOpt.decimals) || (isToken ? 6 : 18));
-                    contractAddr = isToken ? String(buyOpt.contractAddress) : undefined;
+                case 7:
+                    from = _j.sent();
+                    isToken = cn.assetType === 'EVM_ERC20' && !!cn.contractAddress;
+                    decimals = Number((_e = cn.decimals) !== null && _e !== void 0 ? _e : (isToken ? 6 : 18));
+                    contractAddr = isToken ? String(cn.contractAddress) : undefined;
                     return [4 /*yield*/, prisma.order.updateMany({
                             where: { id: id, payoutAt: null, payoutHash: null, status: 'CONFIRMED' },
                             data: { payoutAt: new Date() },
                         })];
-                case 7:
-                    lock = _d.sent();
-                    if (!(lock.count === 0)) return [3 /*break*/, 9];
-                    return [4 /*yield*/, prisma.order.findUnique({ where: { id: id }, select: { status: true, payoutHash: true } })];
                 case 8:
-                    fresh = _d.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ message: 'Already processing', data: { status: fresh === null || fresh === void 0 ? void 0 : fresh.status, payoutHash: (_b = fresh === null || fresh === void 0 ? void 0 : fresh.payoutHash) !== null && _b !== void 0 ? _b : null } }, { status: 200 })];
+                    lock = _j.sent();
+                    if (!(lock.count === 0)) return [3 /*break*/, 10];
+                    return [4 /*yield*/, prisma.order.findUnique({
+                            where: { id: id },
+                            select: { status: true, payoutHash: true },
+                        })];
                 case 9:
+                    fresh = _j.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({
+                            message: 'Already processing',
+                            data: { status: fresh === null || fresh === void 0 ? void 0 : fresh.status, payoutHash: (_f = fresh === null || fresh === void 0 ? void 0 : fresh.payoutHash) !== null && _f !== void 0 ? _f : null },
+                        }, { status: 200 })];
+                case 10:
                     amountStr = toFixedStr(Number(order_1.amount), decimals);
                     txHash = '';
-                    if (!!isToken) return [3 /*break*/, 12];
+                    if (!!isToken) return [3 /*break*/, 13];
                     value = (0, ethers_1.parseUnits)(amountStr, decimals);
                     return [4 /*yield*/, wallet.sendTransaction({ to: order_1.receivingAddr, value: value })];
-                case 10:
-                    tx = _d.sent();
-                    return [4 /*yield*/, tx.wait(1)];
                 case 11:
-                    rc = _d.sent();
+                    tx = _j.sent();
+                    return [4 /*yield*/, tx.wait(1)];
+                case 12:
+                    rc = _j.sent();
                     txHash = tx.hash;
                     if (!rc)
                         throw new Error('Native payout tx not confirmed');
-                    return [3 /*break*/, 18];
-                case 12:
-                    contract = new ethers_1.Contract(contractAddr, ERC20_ABI, wallet);
-                    if (!!(buyOpt === null || buyOpt === void 0 ? void 0 : buyOpt.decimals)) return [3 /*break*/, 14];
-                    _c = Number;
-                    return [4 /*yield*/, contract.decimals()];
+                    return [3 /*break*/, 19];
                 case 13:
-                    // fallback ambil decimals dari kontrak
-                    decimals = _c.apply(void 0, [_d.sent()]);
-                    _d.label = 14;
+                    contract = new ethers_1.Contract(contractAddr, ERC20_ABI, wallet);
+                    if (!!cn.decimals) return [3 /*break*/, 15];
+                    _h = Number;
+                    return [4 /*yield*/, contract.decimals()];
                 case 14:
+                    decimals = _h.apply(void 0, [_j.sent()]);
+                    _j.label = 15;
+                case 15:
                     value = (0, ethers_1.parseUnits)(amountStr, decimals);
                     return [4 /*yield*/, contract.balanceOf(from)];
-                case 15:
-                    bal = _d.sent();
+                case 16:
+                    bal = _j.sent();
                     if (bal < value) {
                         throw new Error("Insufficient token balance: have ".concat(bal.toString(), ", need ").concat(value.toString()));
                     }
                     return [4 /*yield*/, contract.transfer(order_1.receivingAddr, value)];
-                case 16:
-                    tx = _d.sent();
-                    return [4 /*yield*/, tx.wait(1)];
                 case 17:
-                    rc = _d.sent();
+                    tx = _j.sent();
+                    return [4 /*yield*/, tx.wait(1)];
+                case 18:
+                    rc = _j.sent();
                     txHash = tx.hash;
                     if (!rc)
                         throw new Error('ERC-20 payout tx not confirmed');
-                    _d.label = 18;
-                case 18: 
-                // 7) Simpan hash & tandai selesai
+                    _j.label = 19;
+                case 19: 
+                // 8) Simpan hash & tandai selesai
                 return [4 /*yield*/, prisma.order.update({
                         where: { id: id },
                         data: {
                             status: 'COMPLETED',
                             payoutHash: txHash,
-                            // payoutAt sudah di-set saat lock; bisa diperbarui ke waktu final jika mau
+                            // payoutAt sudah di-set saat lock
                         },
                     })];
-                case 19:
-                    // 7) Simpan hash & tandai selesai
-                    _d.sent();
-                    // 8) (Opsional) Bersihkan alamat pantauan di webhook PAY network (alamat pembayaran)
-                    //    Jalankan async tanpa blocking respons
+                case 20:
+                    // 8) Simpan hash & tandai selesai
+                    _j.sent();
+                    // 9) (Opsional) bersihkan alamat pantauan di PAY network (alamat pembayaran)
                     queueMicrotask(function () {
                         try {
                             var payCfg = (0, networkMap_1.getEvmConfigByName)(order_1.payNetwork.name);
@@ -179,20 +233,28 @@ function POST(_req, ctx) {
                             }
                         }
                         catch (_a) {
-                            // diamkan; jangan ganggu flow payout
+                            // jangan ganggu flow payout
                         }
                     });
                     return [2 /*return*/, server_1.NextResponse.json({
                             message: 'Delivered',
                             data: { payoutHash: txHash, type: isToken ? 'erc20' : 'native' },
                         })];
-                case 20:
-                    e_1 = _d.sent();
+                case 21:
+                    {
+                        return [2 /*return*/, server_1.NextResponse.json({ message: "".concat(cn.network.family, " payout belum diimplementasikan") }, { status: 400 })];
+                    }
+                    _j.label = 22;
+                case 22: return [3 /*break*/, 24];
+                case 23:
+                    e_1 = _j.sent();
                     console.error('POST /api/orders/[id]/deliver error:', e_1);
                     return [2 /*return*/, server_1.NextResponse.json({ message: (e_1 === null || e_1 === void 0 ? void 0 : e_1.message) || 'Internal server error' }, { status: 500 })];
-                case 21: return [2 /*return*/];
+                case 24: return [2 /*return*/];
             }
         });
     });
 }
 exports.POST = POST;
+""(templateObject_1 || (templateObject_1 = __makeTemplateObject(["\uEA010\uEA02"], ["\uEA010\uEA02"])));
+var templateObject_1;

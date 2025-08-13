@@ -1,7 +1,19 @@
-import type { NextConfig } from "next";
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverActions: {
+      // Izinkan panggilan Server Actions dari origin admin kamu
+      // Catatan: pakai host:port (tanpa protocol) sesuai header Origin yang diteruskan proxy
+      allowedOrigins: ['52.230.96.30:3000'],
+    },
+  },
 
-const nextConfig: NextConfig = {
-  /* config options here */
+  // (opsional) Kalau kamu butuh memastikan semua file actions/services berjalan di Node runtime
+  // appDir: true, // default Next.js 13+/14+/15
+  // modularizeImports: {},
+
+  // (opsional) Strict mode/typed routes, dll.
+  reactStrictMode: true,
 };
 
-export default nextConfig;
+module.exports = nextConfig;

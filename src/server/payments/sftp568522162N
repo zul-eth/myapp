@@ -1,0 +1,31 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.validateMemo = void 0;
+require("server-only");
+function validateMemo(kind, memo) {
+    if (kind === 'NONE')
+        return { ok: true };
+    if (memo === undefined || memo === null || memo === '') {
+        return { ok: false, reason: 'Memo/Tag diperlukan' };
+    }
+    switch (kind) {
+        case 'XRP_TAG': {
+            var n = Number(memo);
+            if (!Number.isInteger(n) || n < 0 || n > 0xffffffff)
+                return { ok: false, reason: 'Tag XRP harus angka 0..4294967295' };
+            return { ok: true, value: n };
+        }
+        case 'EOS_TEXT':
+        case 'TON_TEXT': {
+            var s = String(memo);
+            if (s.length === 0)
+                return { ok: false, reason: 'Memo kosong' };
+            if (s.length > 128)
+                return { ok: false, reason: 'Memo > 128 char' };
+            return { ok: true, value: s };
+        }
+        default:
+            return { ok: true, value: String(memo) };
+    }
+}
+exports.validateMemo = validateMemo;
