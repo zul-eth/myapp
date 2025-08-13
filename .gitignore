@@ -54,4 +54,5 @@ node_modules/.cache/
 
 # SFTP temp files
 *.sftp
+.sftp*
 *.sftpTemp
