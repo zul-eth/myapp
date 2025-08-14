@@ -37,19 +37,18 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.POST = exports.GET = void 0;
-var core_1 = require("@/core");
 var server_1 = require("next/server");
+var core_1 = require("@/core");
 function GET() {
     return __awaiter(this, void 0, void 0, function () {
-        var app, list;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
+        var app, _a, _b;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
                 case 0:
                     app = (0, core_1.getApplicationManager)();
-                    return [4 /*yield*/, app.network.service.list()];
-                case 1:
-                    list = _a.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(list)];
+                    _b = (_a = server_1.NextResponse).json;
+                    return [4 /*yield*/, app.network.service.listAll()];
+                case 1: return [2 /*return*/, _b.apply(_a, [_c.sent()])];
             }
         });
     });
@@ -57,18 +56,39 @@ function GET() {
 exports.GET = GET;
 function POST(req) {
     return __awaiter(this, void 0, void 0, function () {
-        var app, data, created;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
+        var app, _a, name, logoUrl, family, chainId, symbol, rpcUrl, explorer, created, e_1;
+        return __generator(this, function (_b) {
+            switch (_b.label) {
                 case 0:
                     app = (0, core_1.getApplicationManager)();
                     return [4 /*yield*/, req.json()];
                 case 1:
-                    data = _a.sent();
-                    return [4 /*yield*/, app.network.service.create(data)];
+                    _a = _b.sent(), name = _a.name, logoUrl = _a.logoUrl, family = _a.family, chainId = _a.chainId, symbol = _a.symbol, rpcUrl = _a.rpcUrl, explorer = _a.explorer;
+                    if (!name || !family) {
+                        return [2 /*return*/, server_1.NextResponse.json({ error: "Name dan Family wajib diisi" }, { status: 400 })];
+                    }
+                    _b.label = 2;
                 case 2:
-                    created = _a.sent();
+                    _b.trys.push([2, 4, , 5]);
+                    return [4 /*yield*/, app.network.service.create({
+                            name: name,
+                            logoUrl: logoUrl,
+                            family: family,
+                            chainId: chainId,
+                            symbol: symbol,
+                            rpcUrl: rpcUrl,
+                            explorer: explorer
+                        })];
+                case 3:
+                    created = _b.sent();
                     return [2 /*return*/, server_1.NextResponse.json(created, { status: 201 })];
+                case 4:
+                    e_1 = _b.sent();
+                    if (e_1.message.includes("sudah ada")) {
+                        return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 409 })];
+                    }
+                    return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 400 })];
+                case 5: return [2 /*return*/];
             }
         });
     });

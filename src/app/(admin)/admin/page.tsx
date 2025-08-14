@@ -4,7 +4,7 @@ export default function AdminHomePage() {
     { name: "Networks", href: "/admin/networks" },
     { name: "Coin Networks", href: "/admin/coin-networks" },
     { name: "Payment Options", href: "/admin/payment-options" },
-    { name: "Rates", href: "/admin/rates" },
+    { name: "Exchange Rates", href: "/admin/exchange-rates" },
     { name: "Orders", href: "/admin/orders" },
   ];
 

@@ -1,18 +1,22 @@
 "use client";
-import useSWR from "swr";
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+import { useEffect, useState } from "react";
 
-export default function CoinSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { data } = useSWR("/api/coins", fetcher);
-  if (!data) return <option>Loading...</option>;
+export default function CoinSelect({ value, onChange }: { value?: string; onChange: (v: string) => void }) {
+  const [coins, setCoins] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/client/coins")
+      .then((res) => res.json())
+      .then((data) => setCoins(data));
+  }, []);
 
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} className="border p-1 w-full">
-      <option value="">Select Coin</option>
-      {data.map((coin: any) => (
-        <option key={coin.id} value={coin.id}>
-          {coin.symbol} — {coin.name}
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="border rounded p-2 w-full">
+      <option value="">Pilih Coin</option>
+      {coins.map((coin) => (
+        <option key={coin.id} value={coin.symbol}>
+          {coin.symbol} - {coin.name}
         </option>
       ))}
     </select>

@@ -57,19 +57,31 @@ function GET() {
 exports.GET = GET;
 function POST(req) {
     return __awaiter(this, void 0, void 0, function () {
-        var app, body, symbol, name, logoUrl, created;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
+        var app, _a, symbol, name, logoUrl, created, e_1;
+        return __generator(this, function (_b) {
+            switch (_b.label) {
                 case 0:
                     app = (0, core_1.getApplicationManager)();
                     return [4 /*yield*/, req.json()];
                 case 1:
-                    body = _a.sent();
-                    symbol = body.symbol, name = body.name, logoUrl = body.logoUrl;
-                    return [4 /*yield*/, app.coin.service.create({ symbol: symbol, name: name, logoUrl: logoUrl })];
+                    _a = _b.sent(), symbol = _a.symbol, name = _a.name, logoUrl = _a.logoUrl;
+                    if (!symbol || !name) {
+                        return [2 /*return*/, server_1.NextResponse.json({ error: "Symbol dan Name wajib diisi" }, { status: 400 })];
+                    }
+                    _b.label = 2;
                 case 2:
-                    created = _a.sent();
+                    _b.trys.push([2, 4, , 5]);
+                    return [4 /*yield*/, app.coin.service.create({ symbol: symbol, name: name, logoUrl: logoUrl })];
+                case 3:
+                    created = _b.sent();
                     return [2 /*return*/, server_1.NextResponse.json(created, { status: 201 })];
+                case 4:
+                    e_1 = _b.sent();
+                    if (e_1.message.includes("sudah ada")) {
+                        return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 409 })];
+                    }
+                    return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 400 })];
+                case 5: return [2 /*return*/];
             }
         });
     });

@@ -1,45 +1,38 @@
-// src/lib/api/paymentOption.ts
-import type { PaymentOption } from '@/types/paymentOption';
+const base = "/api/admin/payment-options";
 
-const baseUrl = '/api/payment-options';
-
-export async function getPaymentOptions(): Promise<PaymentOption[]> {
-  const res = await fetch(baseUrl, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Gagal mengambil payment options');
-  return res.json();
+async function parseJSON(res: Response) {
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
-export async function createPaymentOption(coinId: string, networkId: string) {
-  const res = await fetch(baseUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ coinId, networkId }),
+export const getPaymentOptions = async () => {
+  const res = await fetch(base, { cache: "no-store" });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengambil daftar PaymentOption");
+  return parseJSON(res);
+};
+
+export const createPaymentOption = async (data: { coinId: string; networkId: string }) => {
+  const res = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || 'Gagal menambah payment option');
-  }
-  return res.json() as Promise<{ message: string; paymentOption: PaymentOption }>;
-}
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal membuat PaymentOption");
+  return parseJSON(res);
+};
 
-export async function setPaymentOptionActive(id: string, isActive: boolean) {
-  const res = await fetch(`${baseUrl}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ isActive }),
+export const togglePaymentOptionActive = async (id: string, isActive: boolean) => {
+  const res = await fetch(`${base}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isActive })
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || 'Gagal memperbarui status');
-  }
-  return res.json() as Promise<{ message: string; paymentOption: PaymentOption }>;
-}
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengubah status PaymentOption");
+  return parseJSON(res);
+};
 
-export async function deletePaymentOption(id: string) {
-  const res = await fetch(`${baseUrl}/${id}`, { method: 'DELETE' });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || 'Gagal menghapus payment option');
-  }
-  return res.json() as Promise<{ message: string }>;
-}
+export const deletePaymentOption = async (id: string) => {
+  const res = await fetch(`${base}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal menghapus PaymentOption");
+  return parseJSON(res);
+};

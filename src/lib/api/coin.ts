@@ -1,38 +1,43 @@
-import { Coin } from '@/types/coin';
+const base = "/api/admin/coins";
 
-export async function getCoins(): Promise<Coin[]> {
-  const res = await fetch('/api/coins');
-  if (!res.ok) throw new Error('Failed to fetch coins');
-  return res.json();
+async function parseJSON(res: Response) {
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
-export async function createCoin(data: Omit<Coin, 'id'>) {
-  const res = await fetch('/api/coins', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+export const getCoins = async () => {
+  const res = await fetch(base);
+  return parseJSON(res);
+};
+
+export const createCoin = async (data: any) => {
+  const res = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
-  return res.json();
-}
+  return parseJSON(res);
+};
 
-export async function updateCoin(id: string, data: Partial<Coin>) {
-  const res = await fetch(`/api/coins/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+export const updateCoin = async (id: string, data: any) => {
+  const res = await fetch(`${base}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
-  return res.json();
-}
+  return parseJSON(res);
+};
 
-export async function deleteCoin(id: string) {
-  const res = await fetch(`/api/coins/${id}`, {
-    method: 'DELETE',
+export const deleteCoin = async (id: string) => {
+  const res = await fetch(`${base}/${id}`, { method: "DELETE" });
+  return parseJSON(res);
+};
+
+export const toggleCoinActive = async (id: string, isActive: boolean) => {
+  const res = await fetch(`${base}/${id}/active`, { // ✅ URL benar
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isActive })
   });
-
-  if (!res.ok) {
-    const msg = await res.json();
-    throw new Error(msg.message || 'Gagal menghapus coin');
-  }
-
-  return res.json();
-}
+  return parseJSON(res);
+};

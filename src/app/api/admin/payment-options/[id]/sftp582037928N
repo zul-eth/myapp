@@ -36,59 +36,62 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DELETE = exports.PUT = exports.GET = void 0;
+exports.DELETE = exports.PATCH = void 0;
+var server_1 = require("next/server");
 var core_1 = require("@/core");
-function GET(_, _a) {
+function PATCH(req, _a) {
     var params = _a.params;
     return __awaiter(this, void 0, void 0, function () {
-        var app, record;
+        var id, isActive, app, updated, e_1;
         return __generator(this, function (_b) {
             switch (_b.label) {
-                case 0:
-                    app = (0, core_1.getApplicationManager)();
-                    return [4 /*yield*/, app.paymentOption.service.get(params.id)];
+                case 0: return [4 /*yield*/, params];
                 case 1:
-                    record = _b.sent();
-                    if (!record)
-                        return [2 /*return*/, new Response(JSON.stringify({ error: "Not found" }), { status: 404 })];
-                    return [2 /*return*/, new Response(JSON.stringify(record), { status: 200 })];
-            }
-        });
-    });
-}
-exports.GET = GET;
-function PUT(req, _a) {
-    var params = _a.params;
-    return __awaiter(this, void 0, void 0, function () {
-        var app, data, updated;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
-                case 0:
-                    app = (0, core_1.getApplicationManager)();
+                    id = (_b.sent()).id;
                     return [4 /*yield*/, req.json()];
-                case 1:
-                    data = _b.sent();
-                    return [4 /*yield*/, app.paymentOption.service.update(params.id, data)];
                 case 2:
+                    isActive = (_b.sent()).isActive;
+                    if (typeof isActive !== "boolean") {
+                        return [2 /*return*/, server_1.NextResponse.json({ error: "isActive harus boolean" }, { status: 400 })];
+                    }
+                    app = (0, core_1.getApplicationManager)();
+                    _b.label = 3;
+                case 3:
+                    _b.trys.push([3, 5, , 6]);
+                    return [4 /*yield*/, app.paymentOption.service.update(id, { isActive: isActive })];
+                case 4:
                     updated = _b.sent();
-                    return [2 /*return*/, new Response(JSON.stringify(updated), { status: 200 })];
+                    return [2 /*return*/, server_1.NextResponse.json(updated)];
+                case 5:
+                    e_1 = _b.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 400 })];
+                case 6: return [2 /*return*/];
             }
         });
     });
 }
-exports.PUT = PUT;
+exports.PATCH = PATCH;
 function DELETE(_, _a) {
     var params = _a.params;
     return __awaiter(this, void 0, void 0, function () {
-        var app;
+        var id, app, deleted, e_2;
         return __generator(this, function (_b) {
             switch (_b.label) {
-                case 0:
-                    app = (0, core_1.getApplicationManager)();
-                    return [4 /*yield*/, app.paymentOption.service.delete(params.id)];
+                case 0: return [4 /*yield*/, params];
                 case 1:
-                    _b.sent();
-                    return [2 /*return*/, new Response(null, { status: 204 })];
+                    id = (_b.sent()).id;
+                    app = (0, core_1.getApplicationManager)();
+                    _b.label = 2;
+                case 2:
+                    _b.trys.push([2, 4, , 5]);
+                    return [4 /*yield*/, app.paymentOption.service.delete(id)];
+                case 3:
+                    deleted = _b.sent();
+                    return [2 /*return*/, server_1.NextResponse.json(deleted)];
+                case 4:
+                    e_2 = _b.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({ error: e_2.message }, { status: 400 })];
+                case 5: return [2 /*return*/];
             }
         });
     });

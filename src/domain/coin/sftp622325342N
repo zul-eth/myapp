@@ -54,58 +54,145 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CoinRepositoryPrisma = void 0;
 var prisma_1 = require("@/lib/prisma");
 var base_repository_1 = require("@/domain/common/base.repository");
+var client_1 = require("@prisma/client");
 var CoinRepositoryPrisma = /** @class */ (function (_super) {
     __extends(CoinRepositoryPrisma, _super);
     function CoinRepositoryPrisma() {
         return _super.call(this, prisma_1.prisma.coin) || this;
     }
-    CoinRepositoryPrisma.prototype.createCoin = function (data) {
+    CoinRepositoryPrisma.prototype.findAllClean = function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, prisma_1.prisma.coin.create({
-                            data: {
-                                symbol: data.symbol,
-                                name: data.name,
-                                logoUrl: data.logoUrl
-                            }
-                        })];
-                    case 1: return [2 /*return*/, _a.sent()];
+                return [2 /*return*/, prisma_1.prisma.coin.findMany({
+                        orderBy: { createdAt: "desc" }
+                    })];
+            });
+        });
+    };
+    CoinRepositoryPrisma.prototype.createCoin = function (data) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function () {
+            var symbol, name, exists;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        symbol = data.symbol.trim().toUpperCase();
+                        name = data.name.trim();
+                        if (!symbol)
+                            throw new Error("Symbol wajib diisi");
+                        if (!name)
+                            throw new Error("Name wajib diisi");
+                        return [4 /*yield*/, prisma_1.prisma.coin.findFirst({
+                                where: { symbol: { equals: symbol, mode: "insensitive" } }
+                            })];
+                    case 1:
+                        exists = _b.sent();
+                        if (exists)
+                            throw new Error("Coin dengan symbol ".concat(symbol, " sudah ada"));
+                        return [2 /*return*/, prisma_1.prisma.coin.create({
+                                data: {
+                                    symbol: symbol,
+                                    name: name,
+                                    logoUrl: ((_a = data.logoUrl) === null || _a === void 0 ? void 0 : _a.trim()) || null
+                                }
+                            })];
                 }
             });
         });
     };
     CoinRepositoryPrisma.prototype.updateCoin = function (id, data) {
+        var _a;
         return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, prisma_1.prisma.coin.update({
-                            where: { id: id },
-                            data: data
-                        })];
-                    case 1: return [2 /*return*/, _a.sent()];
+            var updateData, symbol, exists;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        updateData = {};
+                        if (!data.symbol) return [3 /*break*/, 2];
+                        symbol = data.symbol.trim().toUpperCase();
+                        return [4 /*yield*/, prisma_1.prisma.coin.findFirst({
+                                where: { symbol: { equals: symbol, mode: "insensitive" }, NOT: { id: id } }
+                            })];
+                    case 1:
+                        exists = _b.sent();
+                        if (exists)
+                            throw new Error("Coin dengan symbol ".concat(symbol, " sudah ada"));
+                        updateData.symbol = symbol;
+                        _b.label = 2;
+                    case 2:
+                        if (data.name) {
+                            updateData.name = data.name.trim();
+                        }
+                        if (data.logoUrl !== undefined) {
+                            updateData.logoUrl = ((_a = data.logoUrl) === null || _a === void 0 ? void 0 : _a.trim()) || null;
+                        }
+                        return [2 /*return*/, prisma_1.prisma.coin.update({
+                                where: { id: id },
+                                data: updateData
+                            })];
                 }
             });
         });
     };
     CoinRepositoryPrisma.prototype.deleteCoin = function (id) {
         return __awaiter(this, void 0, void 0, function () {
+            var activeStatuses, activeOrder;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, prisma_1.prisma.coinNetwork.deleteMany({ where: { coinId: id } })];
+                    case 0:
+                        activeStatuses = [
+                            client_1.OrderStatus.PENDING,
+                            client_1.OrderStatus.WAITING_PAYMENT,
+                            client_1.OrderStatus.UNDERPAID,
+                            client_1.OrderStatus.WAITING_CONFIRMATION
+                        ];
+                        return [4 /*yield*/, prisma_1.prisma.order.findFirst({
+                                where: {
+                                    OR: [{ coinToBuyId: id }, { payWithId: id }],
+                                    status: { in: activeStatuses }
+                                }
+                            })];
                     case 1:
-                        _a.sent();
-                        return [4 /*yield*/, prisma_1.prisma.paymentOption.deleteMany({ where: { coinId: id } })];
+                        activeOrder = _a.sent();
+                        if (!activeOrder) return [3 /*break*/, 3];
+                        return [4 /*yield*/, prisma_1.prisma.coin.update({
+                                where: { id: id },
+                                data: { isActive: false }
+                            })];
                     case 2:
                         _a.sent();
-                        return [4 /*yield*/, prisma_1.prisma.order.deleteMany({ where: { OR: [{ coinToBuyId: id }, { payWithId: id }] } })];
-                    case 3:
-                        _a.sent();
-                        return [4 /*yield*/, prisma_1.prisma.exchangeRate.deleteMany({ where: { OR: [{ buyCoinId: id }, { payCoinId: id }] } })];
+                        return [2 /*return*/, {
+                                success: true,
+                                type: "soft-delete",
+                                message: "Coin dinonaktifkan karena masih digunakan di order aktif"
+                            }];
+                    case 3: 
+                    // Hard delete semua relasi sesuai model
+                    return [4 /*yield*/, prisma_1.prisma.coinNetwork.deleteMany({ where: { coinId: id } })];
                     case 4:
+                        // Hard delete semua relasi sesuai model
+                        _a.sent();
+                        return [4 /*yield*/, prisma_1.prisma.paymentOption.deleteMany({ where: { coinId: id } })];
+                    case 5:
+                        _a.sent();
+                        return [4 /*yield*/, prisma_1.prisma.order.deleteMany({
+                                where: { OR: [{ coinToBuyId: id }, { payWithId: id }] }
+                            })];
+                    case 6:
+                        _a.sent();
+                        return [4 /*yield*/, prisma_1.prisma.exchangeRate.deleteMany({
+                                where: { OR: [{ buyCoinId: id }, { payCoinId: id }] }
+                            })];
+                    case 7:
                         _a.sent();
                         return [4 /*yield*/, prisma_1.prisma.coin.delete({ where: { id: id } })];
-                    case 5: return [2 /*return*/, _a.sent()];
+                    case 8:
+                        _a.sent();
+                        return [2 /*return*/, {
+                                success: true,
+                                type: "hard-delete",
+                                message: "Coin dihapus permanen"
+                            }];
                 }
             });
         });

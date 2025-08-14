@@ -1,22 +1,25 @@
+import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
-import { NextRequest } from "next/server";
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const body = await req.json();
   const app = getApplicationManager();
-  const order = await app.order.service.get(params.id);
-  if (!order) return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
-  return new Response(JSON.stringify(order), { status: 200 });
+  try {
+    const updated = await app.order.service.update(id, body);
+    return NextResponse.json(updated);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 400 });
+  }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const app = getApplicationManager();
-  const data = await req.json();
-  const updated = await app.order.service.update(params.id, data);
-  return new Response(JSON.stringify(updated), { status: 200 });
-}
-
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
-  const app = getApplicationManager();
-  await app.order.service.delete(params.id);
-  return new Response(null, { status: 204 });
+  try {
+    const deleted = await app.order.service.delete(id);
+    return NextResponse.json(deleted);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 400 });
+  }
 }

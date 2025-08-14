@@ -9,8 +9,19 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const app = getApplicationManager();
-  const body = await req.json();
-  const { symbol, name, logoUrl } = body; // ✅ Tidak ada id
-  const created = await app.coin.service.create({ symbol, name, logoUrl });
-  return NextResponse.json(created, { status: 201 });
+  const { symbol, name, logoUrl } = await req.json();
+
+  if (!symbol || !name) {
+    return NextResponse.json({ error: "Symbol dan Name wajib diisi" }, { status: 400 });
+  }
+
+  try {
+    const created = await app.coin.service.create({ symbol, name, logoUrl });
+    return NextResponse.json(created, { status: 201 });
+  } catch (e: any) {
+    if (e.message.includes("sudah ada")) {
+      return NextResponse.json({ error: e.message }, { status: 409 });
+    }
+    return NextResponse.json({ error: e.message }, { status: 400 });
+  }
 }

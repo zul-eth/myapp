@@ -1,14 +1,26 @@
+import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
-import { NextRequest } from "next/server";
 
 export async function GET() {
   const app = getApplicationManager();
-  return new Response(JSON.stringify(await app.paymentOption.service.list()), { status: 200 });
+  return NextResponse.json(await app.paymentOption.service.listAll());
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const app = getApplicationManager();
-  const data = await req.json();
-  const created = await app.paymentOption.service.create(data);
-  return new Response(JSON.stringify(created), { status: 201 });
+  const { coinId, networkId } = await req.json();
+
+  if (!coinId || !networkId) {
+    return NextResponse.json({ error: "Coin dan Network wajib diisi" }, { status: 400 });
+  }
+
+  try {
+    const created = await app.paymentOption.service.create({ coinId, networkId });
+    return NextResponse.json(created, { status: 201 });
+  } catch (e: any) {
+    if (e.message.includes("sudah ada")) {
+      return NextResponse.json({ error: e.message }, { status: 409 });
+    }
+    return NextResponse.json({ error: e.message }, { status: 400 });
+  }
 }

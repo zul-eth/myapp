@@ -1,43 +1,48 @@
-// src/lib/api/network.ts
-import { Network } from '@/types/network';
+const base = "/api/admin/networks";
 
-const baseUrl = '/api/networks';
-
-export async function getNetworks(): Promise<Network[]> {
-  const res = await fetch(baseUrl);
-  if (!res.ok) throw new Error('Gagal mengambil data jaringan');
-  return res.json();
+async function parseJSON(res: Response) {
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
-export async function createNetwork(data: Partial<Network>): Promise<Network> {
-  const res = await fetch(baseUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+export const getNetworks = async () => {
+  const res = await fetch(base, { cache: "no-store" });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengambil daftar network");
+  return parseJSON(res);
+};
+
+export const createNetwork = async (data: any) => {
+  const res = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal membuat network");
+  return parseJSON(res);
+};
 
-  if (!res.ok) throw new Error('Gagal membuat jaringan');
-  const json = await res.json();
-  return json.network ?? json;
-}
-
-export async function updateNetwork(id: string, data: Partial<Network>): Promise<Network> {
-  const res = await fetch(`${baseUrl}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+export const updateNetwork = async (id: string, data: any) => {
+  const res = await fetch(`${base}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal memperbarui network");
+  return parseJSON(res);
+};
 
-  if (!res.ok) throw new Error('Gagal memperbarui jaringan');
-  const json = await res.json();
-  return json.network ?? json;
-}
+export const deleteNetwork = async (id: string) => {
+  const res = await fetch(`${base}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal menghapus network");
+  return parseJSON(res);
+};
 
-export async function deleteNetwork(id: string): Promise<{ message: string }> {
-  const res = await fetch(`${baseUrl}/${id}`, {
-    method: 'DELETE',
+export const toggleNetworkActive = async (id: string, isActive: boolean) => {
+  const res = await fetch(`${base}/${id}/active`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isActive })
   });
-
-  if (!res.ok) throw new Error('Gagal menghapus jaringan');
-  return res.json();
-}
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengubah status aktif network");
+  return parseJSON(res);
+};

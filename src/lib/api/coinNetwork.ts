@@ -1,45 +1,50 @@
-// src/lib/api/coinNetwork.ts
-import { CoinNetworkRelation } from '@/types/coinNetwork';
+const base = "/api/admin/coin-networks";
 
-const baseUrl = '/api/coin-network';
-
-export async function getRelations(): Promise<CoinNetworkRelation[]> {
-  const res = await fetch(baseUrl, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Gagal mengambil data relasi');
-  return res.json();
+async function parseJSON(res: Response) {
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
-export async function createRelation(coinId: string, networkId: string) {
-  const res = await fetch(baseUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ coinId, networkId }),
+export const getCoinNetworks = async () => {
+  const res = await fetch(base, { cache: "no-store" });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengambil daftar CoinNetwork");
+  return parseJSON(res);
+};
+
+export const createCoinNetwork = async (data: any) => {
+  const res = await fetch(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || 'Gagal membuat relasi');
-  }
-  return res.json() as Promise<{ message: string; relation: CoinNetworkRelation }>;
-}
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal membuat CoinNetwork");
+  return parseJSON(res);
+};
 
-export async function toggleRelation(id: string, isActive: boolean) {
-  const res = await fetch(`${baseUrl}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ isActive }),
+export const updateCoinNetwork = async (id: string, data: any) => {
+  const res = await fetch(`${base}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || 'Gagal memperbarui relasi');
-  }
-  return res.json() as Promise<{ message: string; relation: CoinNetworkRelation }>;
-}
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal memperbarui CoinNetwork");
+  return parseJSON(res);
+};
 
-export async function deleteRelation(id: string) {
-  const res = await fetch(`${baseUrl}/${id}`, { method: 'DELETE' });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || 'Gagal menghapus relasi');
-  }
-  return res.json() as Promise<{ message: string }>;
-}
+export const deleteCoinNetwork = async (id: string) => {
+  const res = await fetch(`${base}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal menghapus CoinNetwork");
+  return parseJSON(res);
+};
+
+export const getAssetTypes = async () => {
+  const res = await fetch(`${base}/asset-types`);
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengambil daftar AssetType");
+  return parseJSON(res);
+};
+
+export const getMemoKinds = async () => {
+  const res = await fetch(`${base}/memo-kinds`);
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengambil daftar MemoKind");
+  return parseJSON(res);
+};

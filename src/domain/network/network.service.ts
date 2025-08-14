@@ -3,42 +3,42 @@ import { NetworkRepositoryPrisma } from "./network.repository";
 export class NetworkService {
   constructor(private readonly repo: NetworkRepositoryPrisma) {}
 
-  async list() {
-    return this.repo.findAll();
-  }
-
-  async get(id: string) {
-    return this.repo.findById(id);
+  async listAll() {
+    return this.repo.findAllClean();
   }
 
   async create(data: {
     name: string;
     logoUrl?: string;
-    family?: string;
+    family: string;
     chainId?: string;
     symbol?: string;
     rpcUrl?: string;
     explorer?: string;
   }) {
-    return this.repo.create(data);
+    return this.repo.createNetwork(data);
   }
 
   async update(
     id: string,
-    data: {
-      name?: string;
+    data: Partial<{
+      name: string;
       logoUrl?: string;
       family?: string;
       chainId?: string;
       symbol?: string;
       rpcUrl?: string;
       explorer?: string;
-    }
+    }>
   ) {
-    return this.repo.update(id, data);
+    return this.repo.updateNetwork(id, data);
   }
 
   async delete(id: string) {
-    return this.repo.delete(id);
+    return this.repo.deleteNetwork(id);
+  }
+
+  async toggleActive(id: string, isActive: boolean) {
+    return this.repo.toggleActive(id, isActive);
   }
 }

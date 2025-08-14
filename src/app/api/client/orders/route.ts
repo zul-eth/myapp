@@ -1,17 +1,13 @@
+import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
-import { NextRequest } from "next/server";
 
-export async function GET() {
+export async function POST(req: Request) {
+  const body = await req.json();
   const app = getApplicationManager();
-  return new Response(JSON.stringify(await app.order.service.list()), { status: 200 });
-}
-
-export async function POST(req: NextRequest) {
-  const app = getApplicationManager();
-  const data = await req.json();
-  const result = await app.order.service.create(data);
-  if (!result.ok) {
-    return new Response(JSON.stringify({ error: result.error?.message }), { status: 400 });
+  try {
+    const order = await app.order.service.create(body);
+    return NextResponse.json(order, { status: 201 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 400 });
   }
-  return new Response(JSON.stringify(result.value), { status: 201 });
 }

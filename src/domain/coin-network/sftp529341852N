@@ -1,4 +1,19 @@
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -38,68 +53,66 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CoinNetworkRepositoryPrisma = void 0;
 var prisma_1 = require("@/lib/prisma");
-var CoinNetworkRepositoryPrisma = /** @class */ (function () {
+var base_repository_1 = require("@/domain/common/base.repository");
+var CoinNetworkRepositoryPrisma = /** @class */ (function (_super) {
+    __extends(CoinNetworkRepositoryPrisma, _super);
     function CoinNetworkRepositoryPrisma() {
+        return _super.call(this, prisma_1.prisma.coinNetwork) || this;
     }
-    CoinNetworkRepositoryPrisma.prototype.findAll = function () {
+    CoinNetworkRepositoryPrisma.prototype.listAll = function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 return [2 /*return*/, prisma_1.prisma.coinNetwork.findMany({
                         include: {
-                            coin: {
-                                select: {
-                                    id: true,
-                                    symbol: true,
-                                    name: true,
-                                    logoUrl: true
-                                }
-                            },
-                            network: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    family: true,
-                                    symbol: true,
-                                    logoUrl: true
-                                }
-                            }
-                        }
+                            coin: true,
+                            network: true
+                        },
+                        orderBy: { createdAt: "desc" }
                     })];
             });
         });
     };
-    CoinNetworkRepositoryPrisma.prototype.findById = function (id) {
+    CoinNetworkRepositoryPrisma.prototype.createCoinNetwork = function (data) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function () {
+            var exists;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0: return [4 /*yield*/, prisma_1.prisma.coinNetwork.findFirst({
+                            where: { coinId: data.coinId, networkId: data.networkId }
+                        })];
+                    case 1:
+                        exists = _b.sent();
+                        if (exists)
+                            throw new Error("CoinNetwork ini sudah ada");
+                        return [2 /*return*/, prisma_1.prisma.coinNetwork.create({
+                                data: {
+                                    coinId: data.coinId,
+                                    networkId: data.networkId,
+                                    assetType: data.assetType || "NATIVE",
+                                    contractAddress: data.contractAddress || null,
+                                    decimals: (_a = data.decimals) !== null && _a !== void 0 ? _a : 18,
+                                    symbolOverride: data.symbolOverride || null,
+                                    memoKind: data.memoKind || "NONE",
+                                    memoLabel: data.memoLabel || null,
+                                    memoRegex: data.memoRegex || null
+                                }
+                            })];
+                }
+            });
+        });
+    };
+    CoinNetworkRepositoryPrisma.prototype.updateCoinNetwork = function (id, data) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, prisma_1.prisma.coinNetwork.findUnique({
+                return [2 /*return*/, prisma_1.prisma.coinNetwork.update({
                         where: { id: id },
-                        include: {
-                            coin: {
-                                select: { id: true, symbol: true, name: true, logoUrl: true }
-                            },
-                            network: {
-                                select: { id: true, name: true, family: true, symbol: true, logoUrl: true }
-                            }
-                        }
+                        data: data
                     })];
             });
         });
     };
-    CoinNetworkRepositoryPrisma.prototype.create = function (data) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, prisma_1.prisma.coinNetwork.create({ data: data })];
-            });
-        });
-    };
-    CoinNetworkRepositoryPrisma.prototype.update = function (id, data) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, prisma_1.prisma.coinNetwork.update({ where: { id: id }, data: data })];
-            });
-        });
-    };
-    CoinNetworkRepositoryPrisma.prototype.delete = function (id) {
+    CoinNetworkRepositoryPrisma.prototype.deleteCoinNetwork = function (id) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 return [2 /*return*/, prisma_1.prisma.coinNetwork.delete({ where: { id: id } })];
@@ -107,5 +120,5 @@ var CoinNetworkRepositoryPrisma = /** @class */ (function () {
         });
     };
     return CoinNetworkRepositoryPrisma;
-}());
+}(base_repository_1.BaseRepository));
 exports.CoinNetworkRepositoryPrisma = CoinNetworkRepositoryPrisma;

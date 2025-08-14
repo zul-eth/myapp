@@ -1,74 +1,135 @@
 "use client";
-import { useState } from "react";
-import useSWR from "swr";
-const fetcher = (url: string) => fetch(url).then(r => r.json());
 
-export default function AdminPaymentOptions() {
-  const { data, mutate } = useSWR("/api/admin/payment-options", fetcher);
-  const [form, setForm] = useState({ id: "", coinId: "", networkId: "" });
-  const [isEditing, setIsEditing] = useState(false);
+import { useEffect, useState } from "react";
+import {
+  getPaymentOptions,
+  createPaymentOption,
+  togglePaymentOptionActive,
+  deletePaymentOption
+} from "@/lib/api/paymentOption";
 
-  const resetForm = () => {
-    setForm({ id: "", coinId: "", networkId: "" });
-    setIsEditing(false);
-  };
+export default function AdminPaymentOptionsPage() {
+  const [paymentOptions, setPaymentOptions] = useState<any[]>([]);
+  const [coins, setCoins] = useState<any[]>([]);
+  const [networks, setNetworks] = useState<any[]>([]);
+  const [formData, setFormData] = useState({ coinId: "", networkId: "" });
 
-  const handleSubmit = async () => {
-    if (isEditing) {
-      await fetch(`/api/admin/payment-options/${form.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coinId: form.coinId, networkId: form.networkId }),
-      });
-    } else {
-      await fetch("/api/admin/payment-options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coinId: form.coinId, networkId: form.networkId }),
-      });
+  const loadData = async () => {
+    const [poData, coinData, netData] = await Promise.all([
+      getPaymentOptions(),
+      fetch("/api/admin/coins").then(r => r.json()),
+      fetch("/api/admin/networks").then(r => r.json())
+    ]);
+
+    setPaymentOptions(poData);
+    setCoins(coinData);
+    setNetworks(netData);
+
+    if (!formData.coinId && coinData.length > 0) {
+      setFormData((prev) => ({ ...prev, coinId: coinData[0].id }));
     }
-    resetForm();
-    mutate();
+    if (!formData.networkId && netData.length > 0) {
+      setFormData((prev) => ({ ...prev, networkId: netData[0].id }));
+    }
   };
 
-  const handleEdit = (po: any) => {
-    setForm({ id: po.id, coinId: po.coinId, networkId: po.networkId });
-    setIsEditing(true);
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createPaymentOption(formData);
+    loadData();
+  };
+
+  const handleToggle = async (id: string, current: boolean) => {
+    await togglePaymentOptionActive(id, !current);
+    loadData();
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/admin/payment-options/${id}`, { method: "DELETE" });
-    mutate();
+    if (confirm("Hapus PaymentOption ini?")) {
+      await deletePaymentOption(id);
+      loadData();
+    }
   };
 
-  if (!data) return <div>Loading...</div>;
-
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Manage Payment Options</h1>
+    <div className="p-4 space-y-6">
+      <h1 className="text-2xl font-bold">Manajemen PaymentOption</h1>
 
-      <div className="mb-4 space-y-2 border p-4 rounded bg-white shadow">
-        <input placeholder="Coin ID" value={form.coinId} onChange={e => setForm({ ...form, coinId: e.target.value })} className="border p-1 w-full" />
-        <input placeholder="Network ID" value={form.networkId} onChange={e => setForm({ ...form, networkId: e.target.value })} className="border p-1 w-full" />
-        <div className="space-x-2">
-          <button onClick={handleSubmit} className="bg-blue-500 text-white px-3 py-1 rounded">
-            {isEditing ? "Update" : "Add"}
-          </button>
-          {isEditing && <button onClick={resetForm} className="bg-gray-400 text-white px-3 py-1 rounded">Cancel</button>}
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-4 border p-4 rounded bg-gray-50">
+        <div>
+          <label className="block font-medium">Coin</label>
+          <select
+            value={formData.coinId}
+            onChange={(e) => setFormData({ ...formData, coinId: e.target.value })}
+            className="border rounded p-2 w-full"
+          >
+            {coins.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.symbol} - {c.name}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
 
-      <ul className="space-y-2">
-        {data.map((po: any) => (
-          <li key={po.id} className="border p-2 flex justify-between items-center bg-white shadow rounded">
-            <span>Coin: {po.coinId} - Network: {po.networkId}</span>
-            <div className="space-x-2">
-              <button onClick={() => handleEdit(po)} className="text-blue-500">Edit</button>
-              <button onClick={() => handleDelete(po.id)} className="text-red-500">Delete</button>
-            </div>
-          </li>
-        ))}
-      </ul>
+        <div>
+          <label className="block font-medium">Network</label>
+          <select
+            value={formData.networkId}
+            onChange={(e) => setFormData({ ...formData, networkId: e.target.value })}
+            className="border rounded p-2 w-full"
+          >
+            {networks.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name} ({n.family})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button className="bg-blue-600 text-white px-4 py-2 rounded">
+          Tambah
+        </button>
+      </form>
+
+      {/* Table */}
+      <table className="w-full border">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="border p-2">Coin</th>
+            <th className="border p-2">Network</th>
+            <th className="border p-2">Status</th>
+            <th className="border p-2">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {paymentOptions.map((po) => (
+            <tr key={po.id}>
+              <td className="border p-2">{po.coin.symbol}</td>
+              <td className="border p-2">{po.network.name}</td>
+              <td className="border p-2">{po.isActive ? "Aktif" : "Nonaktif"}</td>
+              <td className="border p-2 space-x-2">
+                <button
+                  onClick={() => handleToggle(po.id, po.isActive)}
+                  className={`${po.isActive ? "bg-yellow-500" : "bg-green-500"} text-white px-2 py-1 rounded`}
+                >
+                  {po.isActive ? "Nonaktifkan" : "Aktifkan"}
+                </button>
+                <button
+                  onClick={() => handleDelete(po.id)}
+                  className="bg-red-600 text-white px-2 py-1 rounded"
+                >
+                  Hapus
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

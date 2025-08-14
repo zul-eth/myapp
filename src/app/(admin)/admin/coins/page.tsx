@@ -1,116 +1,129 @@
 "use client";
-import { useState } from "react";
-import useSWR from "swr";
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+import { useState, useEffect } from "react";
+import {
+  getCoins,
+  createCoin,
+  updateCoin,
+  deleteCoin,
+  toggleCoinActive
+} from "@/lib/api/coin";
 
-export default function AdminCoins() {
-  const { data, mutate } = useSWR("/api/admin/coins", fetcher);
-  const [form, setForm] = useState({ symbol: "", name: "", logoUrl: "" });
-  const [editId, setEditId] = useState<string | null>(null);
+export default function AdminCoinsPage() {
+  const [coins, setCoins] = useState<any[]>([]);
+  const [editingCoin, setEditingCoin] = useState<any | null>(null);
+  const [formData, setFormData] = useState({ symbol: "", name: "", logoUrl: "" });
 
-  const resetForm = () => {
-    setForm({ symbol: "", name: "", logoUrl: "" });
-    setEditId(null);
+  const loadCoins = async () => {
+    const data = await getCoins();
+    setCoins(data);
   };
 
-  const handleSubmit = async () => {
-    if (!form.symbol || !form.name) return;
+  useEffect(() => {
+    loadCoins();
+  }, []);
 
-    if (editId) {
-      await fetch(`/api/admin/coins/${editId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      symbol: formData.symbol.trim().toUpperCase(),
+      name: formData.name.trim(),
+      logoUrl: formData.logoUrl.trim() || null
+    };
+    if (editingCoin && editingCoin.id) {
+      await updateCoin(editingCoin.id, payload);
     } else {
-      await fetch("/api/admin/coins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      await createCoin(payload);
     }
-    resetForm();
-    await mutate();
+    setEditingCoin(null);
+    setFormData({ symbol: "", name: "", logoUrl: "" });
+    await loadCoins(); // ✅ refresh
   };
 
   const handleEdit = (coin: any) => {
-    setForm({ symbol: coin.symbol, name: coin.name, logoUrl: coin.logoUrl || "" });
-    setEditId(coin.id);
-  };
-
-  const handleDelete = async (id: string) => {
-    await fetch(`/api/admin/coins/${id}`, { method: "DELETE" });
-    await mutate();
-  };
-
-  const toggleActive = async (id: string, isActive: boolean) => {
-    await fetch(`/api/admin/coins/${id}/active`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !isActive }),
+    setEditingCoin(coin);
+    setFormData({
+      symbol: coin.symbol,
+      name: coin.name,
+      logoUrl: coin.logoUrl || ""
     });
-    await mutate();
   };
 
-  if (!data) return <div>Loading...</div>;
+  const handleDelete = async (id?: string) => {
+    if (!id) return;
+    if (confirm("Hapus coin ini?")) {
+      await deleteCoin(id);
+      await loadCoins(); // ✅ refresh
+    }
+  };
+
+  const handleToggle = async (id: string, current: boolean) => {
+    await toggleCoinActive(id, !current);
+    await loadCoins(); // ✅ refresh
+  };
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Manage Coins</h1>
+    <div className="p-4 space-y-6">
+      <h1 className="text-2xl font-bold">Manajemen Coin</h1>
 
-      {/* Form */}
-      <div className="mb-4 space-y-2 border p-4 rounded bg-white shadow">
-        <input
-          placeholder="Symbol"
-          value={form.symbol}
-          onChange={e => setForm({ ...form, symbol: e.target.value })}
-          className="border p-1 w-full"
-        />
-        <input
-          placeholder="Name"
-          value={form.name}
-          onChange={e => setForm({ ...form, name: e.target.value })}
-          className="border p-1 w-full"
-        />
-        <input
-          placeholder="Logo URL"
-          value={form.logoUrl}
-          onChange={e => setForm({ ...form, logoUrl: e.target.value })}
-          className="border p-1 w-full"
-        />
-        <div className="space-x-2">
-          <button onClick={handleSubmit} className="bg-blue-500 text-white px-3 py-1 rounded">
-            {editId ? "Update" : "Add"}
-          </button>
-          {editId && (
-            <button onClick={resetForm} className="bg-gray-400 text-white px-3 py-1 rounded">
-              Cancel
-            </button>
-          )}
+      <form onSubmit={handleSubmit} className="space-y-4 border p-4 rounded bg-gray-50">
+        <div>
+          <label className="block font-medium">Symbol</label>
+          <input
+            value={formData.symbol}
+            onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
+            required
+            className="border rounded p-2 w-full"
+          />
         </div>
-      </div>
+        <div>
+          <label className="block font-medium">Name</label>
+          <input
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+            className="border rounded p-2 w-full"
+          />
+        </div>
+        <div>
+          <label className="block font-medium">Logo URL</label>
+          <input
+            value={formData.logoUrl}
+            onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+            className="border rounded p-2 w-full"
+          />
+        </div>
+        <button className="bg-blue-600 text-white px-4 py-2 rounded">
+          {editingCoin ? "Update" : "Create"}
+        </button>
+      </form>
 
-      {/* List */}
-      <ul className="space-y-2">
-        {data.map((coin: any) => (
-          <li key={coin.id} className="border p-2 flex justify-between items-center bg-white shadow rounded">
-            <span>
-              <b>{coin.symbol}</b> — {coin.name} [{coin.isActive ? "Active" : "Inactive"}]
-            </span>
-            <div className="space-x-2">
-              <button onClick={() => handleEdit(coin)} className="text-blue-500">Edit</button>
-              <button onClick={() => handleDelete(coin.id)} className="text-red-500">Delete</button>
-              <button
-                onClick={() => toggleActive(coin.id, coin.isActive)}
-                className={coin.isActive ? "bg-red-500 text-white px-2" : "bg-green-500 text-white px-2"}
-              >
-                {coin.isActive ? "Deactivate" : "Activate"}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <table className="w-full border">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="border p-2">Symbol</th>
+            <th className="border p-2">Name</th>
+            <th className="border p-2">Status</th>
+            <th className="border p-2">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {coins.map((coin) => (
+            <tr key={coin.id}>
+              <td className="border p-2">{coin.symbol}</td>
+              <td className="border p-2">{coin.name}</td>
+              <td className="border p-2">{coin.isActive ? "Aktif" : "Nonaktif"}</td>
+              <td className="border p-2 space-x-2">
+                <button onClick={() => handleEdit(coin)} className="bg-blue-500 text-white px-2 py-1 rounded">Edit</button>
+                <button onClick={() => handleToggle(coin.id, coin.isActive)} className={`${coin.isActive ? "bg-yellow-500" : "bg-green-500"} text-white px-2 py-1 rounded`}>
+                  {coin.isActive ? "Nonaktifkan" : "Aktifkan"}
+                </button>
+                <button onClick={() => handleDelete(coin.id)} className="bg-red-600 text-white px-2 py-1 rounded">Hapus</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
