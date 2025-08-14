@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PaymentOptionService = void 0;
+var PaymentOptionService = /** @class */ (function () {
+    function PaymentOptionService(repo) {
+        this.repo = repo;
+    }
+    PaymentOptionService.prototype.list = function () {
+        return this.repo.list();
+    };
+    return PaymentOptionService;
+}());
+exports.PaymentOptionService = PaymentOptionService;
