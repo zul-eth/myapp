@@ -37,6 +37,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GET = void 0;
+// src/app/api/public/pairs/route.ts
 var server_1 = require("next/server");
 var core_1 = require("@/core");
 function GET() {
@@ -49,39 +50,50 @@ function GET() {
                     _a.label = 1;
                 case 1:
                     _a.trys.push([1, 3, , 4]);
-                    return [4 /*yield*/, app.exchangeRate.repository.prisma.exchangeRate.findMany({
-                            where: {
-                                buyCoinId: { not: null },
-                                buyNetworkId: { not: null },
-                                payCoinId: { not: null },
-                                payNetworkId: { not: null }
-                            },
-                            include: {
-                                buyCoin: true,
-                                buyNetwork: true,
-                                payCoin: true,
-                                payNetwork: true
-                            },
-                            orderBy: { createdAt: "desc" }
-                        })];
+                    return [4 /*yield*/, app.exchangeRate.service.listAll()];
                 case 2:
                     pairs = _a.sent();
-                    formatted = pairs
-                        .filter(function (p) { return p.buyCoin && p.buyNetwork && p.payCoin && p.payNetwork; }) // pastikan semua relasi ada
-                        .map(function (p) { return ({
-                        id: p.id,
-                        buyCoinId: p.buyCoin.id,
-                        buyCoinSymbol: p.buyCoin.symbol,
-                        buyCoinName: p.buyCoin.name,
-                        buyNetworkId: p.buyNetwork.id,
-                        buyNetworkName: p.buyNetwork.name,
-                        payCoinId: p.payCoin.id,
-                        payCoinSymbol: p.payCoin.symbol,
-                        payCoinName: p.payCoin.name,
-                        payNetworkId: p.payNetwork.id,
-                        payNetworkName: p.payNetwork.name,
-                        rate: p.rate
-                    }); });
+                    formatted = pairs.map(function (p) {
+                        var _a, _b;
+                        var buy = {
+                            coin: {
+                                id: p.buyCoinId,
+                                symbol: p.buyCoin.symbol,
+                                name: p.buyCoin.name,
+                                logoUrl: (_a = p.buyCoin.logoUrl) !== null && _a !== void 0 ? _a : null,
+                            },
+                            network: {
+                                id: p.buyNetworkId,
+                                name: p.buyNetwork.name,
+                                family: p.buyNetwork.family, // ChainFamily
+                            },
+                        };
+                        var pay = {
+                            coin: {
+                                id: p.payCoinId,
+                                symbol: p.payCoin.symbol,
+                                name: p.payCoin.name,
+                                logoUrl: (_b = p.payCoin.logoUrl) !== null && _b !== void 0 ? _b : null,
+                            },
+                            network: {
+                                id: p.payNetworkId,
+                                name: p.payNetwork.name,
+                                family: p.payNetwork.family, // ChainFamily
+                            },
+                        };
+                        // Label panjang & pendek agar mudah dibaca di mobile
+                        var labelLong = "Beli ".concat(buy.coin.symbol, " di ").concat(buy.network.name, " \u2022 Bayar ").concat(pay.coin.symbol, " di ").concat(pay.network.name, " \u2022 ") +
+                            "1 ".concat(buy.coin.symbol, " = ").concat(p.rate, " ").concat(pay.coin.symbol);
+                        var labelShort = "".concat(buy.coin.symbol, "/").concat(pay.coin.symbol, " \u2022 ").concat(pay.network.name, " \u2022 rate ").concat(p.rate);
+                        return {
+                            id: p.id,
+                            rate: p.rate,
+                            buy: buy,
+                            pay: pay,
+                            labelLong: labelLong,
+                            labelShort: labelShort,
+                        };
+                    });
                     return [2 /*return*/, server_1.NextResponse.json(formatted)];
                 case 3:
                     e_1 = _a.sent();

@@ -39,26 +39,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PATCH = void 0;
 var server_1 = require("next/server");
 var core_1 = require("@/core");
-function PATCH(req, _a) {
-    var params = _a.params;
+function PATCH(req, ctx) {
     return __awaiter(this, void 0, void 0, function () {
-        var status, app, updatedOrder, error_1;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var id, status, app, updatedOrder, error_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
                 case 0:
-                    _b.trys.push([0, 3, , 4]);
-                    return [4 /*yield*/, req.json()];
+                    _a.trys.push([0, 4, , 5]);
+                    return [4 /*yield*/, ctx.params];
                 case 1:
-                    status = (_b.sent()).status;
-                    app = (0, core_1.getApplicationManager)();
-                    return [4 /*yield*/, app.order.service.updateStatus(params.id, status)];
+                    id = (_a.sent()).id;
+                    return [4 /*yield*/, req.json()];
                 case 2:
-                    updatedOrder = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ ok: true, order: updatedOrder })];
+                    status = (_a.sent()).status;
+                    app = (0, core_1.getApplicationManager)();
+                    return [4 /*yield*/, app.order.service.setStatus(id, status)];
                 case 3:
-                    error_1 = _b.sent();
+                    updatedOrder = _a.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({ ok: true, order: updatedOrder })];
+                case 4:
+                    error_1 = _a.sent();
                     return [2 /*return*/, server_1.NextResponse.json({ ok: false, error: error_1.message }, { status: 400 })];
-                case 4: return [2 /*return*/];
+                case 5: return [2 /*return*/];
             }
         });
     });

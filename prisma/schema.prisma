@@ -47,6 +47,9 @@ model Coin {
 
   buyRates ExchangeRate[] @relation("BuyRateCoin")
   payRates ExchangeRate[] @relation("PayRateCoin")
+  
+  // BACK-RELATION untuk Payment ↔ Coin
+  payments Payment[] @relation("PaymentCoin")
 
   createdAt DateTime @default(now())
 }
@@ -70,6 +73,15 @@ model Network {
   symbol   String?
   rpcUrl   String?
   explorer String?
+  
+  requiredConfirmations Int       @default(1)
+  minConfirmationsLow   Int?      // opsional: untuk transaksi kecil
+  minConfirmationsHigh  Int?      // opsional: transaksi besar
+  explorerTxTemplate    String?   // contoh: "https://etherscan.io/tx/{tx}"
+  explorerAddrTemplate  String?   // contoh: "https://etherscan.io/address/{addr}"
+  
+  // BACK-RELATION untuk Payment ↔ Network
+  payments Payment[] @relation("PaymentNetwork")
 
   createdAt DateTime @default(now())
 }
@@ -96,6 +108,7 @@ model CoinNetwork {
 
   @@unique([coinId, networkId])
   @@index([networkId, contractAddress])
+  @@index([memoKind])
 }
 
 model PaymentOption {
@@ -112,6 +125,54 @@ model PaymentOption {
   @@unique([coinId, networkId])
 }
 
+model Payment {
+  id           String        @id @default(uuid())
+  orderId      String        @unique
+  order        Order         @relation(fields: [orderId], references: [id])
+
+  // Identitas aset & jaringan pada sisi pembayaran
+  coinId       String
+  networkId    String
+  coin         Coin          @relation("PaymentCoin", fields: [coinId], references: [id])
+  network      Network       @relation("PaymentNetwork", fields: [networkId], references: [id])
+
+  // Tujuan pembayaran (alamat invoice) + memo/tag
+  payToAddress String
+  payToMemo    String?
+
+  // Deteksi transaksi yang masuk
+  txHash       String?       @db.VarChar(128)
+  fromAddress  String?
+  toAddress    String?
+  amountRaw    String?
+  decimals     Int?
+  assetType    AssetType?
+  assetContract String?      @db.VarChar(128)
+
+  // Konfirmasi
+  confirmations          Int           @default(0)
+  requiredConfirmations  Int           @default(1)
+  detectedAt             DateTime?
+  confirmedAt            DateTime?
+
+  // Status verifikasi
+  status        PaymentStatus @default(NOT_STARTED)
+
+  // Idempoten & audit
+  lastWebhookEventId String?  @unique
+  verificationSource String?
+  notes              String?
+
+  // BACK-RELATION untuk WebhookEvent
+  webhookEvents WebhookEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([networkId, txHash])
+  @@index([payToAddress])
+}
+
 model HdCursor {
   id         String   @id @default(uuid())
   chain      String   @unique
@@ -124,6 +185,7 @@ model WalletPoolLegacy {
   id              String @id @default(uuid())
   chain           String
   derivationIndex Int
+  networkId       String?
   address         String @unique
 
   isUsed          Boolean @default(false)
@@ -135,6 +197,25 @@ model WalletPoolLegacy {
   order Order? @relation("WalletPool_Order", fields: [assignedOrderId], references: [id])
 
   @@unique([chain, derivationIndex])
+  @@index([chain, isUsed])
+  @@index([networkId])
+}
+
+
+model WebhookEvent {
+  id           String   @id @default(uuid())
+  provider     String   // "alchemy", "trongrid", "solana-webhook", dsb.
+  externalId   String   @unique // event_id dari provider
+  payloadHash  String   // hash body utk idempoten tambahan
+  rawPayload   Json
+  receivedAt   DateTime @default(now())
+  handled      Boolean  @default(false)
+
+  // relasi longgar ke Payment bila sudah diketahui
+  paymentId    String?
+  payment      Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([provider, handled])
 }
 
 model Order {
@@ -156,14 +237,20 @@ model Order {
 
   receivingAddr String
   receivingMemo String?
-  
+
+  // alamat invoice yang ditampilkan ke pembeli
   paymentAddr   String
   paymentMemo   String?
 
-  txHash        String?
-  confirmations Int         @default(0)
+  // dipindah ke Payment:
+  // txHash        String?
+  // confirmations Int         @default(0)
+
   status        OrderStatus @default(PENDING)
   
+  // BACK-RELATION 1:1 ke Payment
+  payment Payment?
+
   payoutHash      String?   @db.VarChar(128) @unique
   payoutAt        DateTime?
 
@@ -196,14 +283,23 @@ model ExchangeRate {
 }
 
 enum OrderStatus {
-  PENDING
-  WAITING_PAYMENT
-  UNDERPAID
-  WAITING_CONFIRMATION
-  CONFIRMED
-  COMPLETED
-  EXPIRED
-  FAILED
+  PENDING             // Order dibuat, belum men-generate invoice
+  WAITING_PAYMENT     // Invoice dibuat, menunggu pembayaran
+  WAITING_CONFIRMATION// Pembayaran terdeteksi, menunggu konfirmasi on-chain
+  CONFIRMED           // Pembayaran terverifikasi, order siap diproses
+  COMPLETED           // Barang/jasa terpenuhi
+  EXPIRED             // Invoice kedaluwarsa (belum ada pembayaran memadai)
+  CANCELED            // user melakukan pembatalan manual
+  FAILED               // Error fatal (misconfig dsb.)
 }
 
-
+enum PaymentStatus {
+  NOT_STARTED       // belum ada tx terdeteksi
+  DETECTED          // notifikasi awal (webhook/stream)
+  UNDERPAID         // kurang dari expected
+  OVERPAID          // opsional, kalau kamu mau tangani kelebihan
+  CONFIRMING        // valid, menunggu N konfirmasi
+  CONFIRMED         // final, >= N konfirmasi
+  INVALID           // salah alamat/token/memo atau tx gagal/reorg
+  REFUNDED          // opsional
+}

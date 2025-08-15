@@ -1,38 +1,34 @@
 import { prisma } from "@/lib/prisma";
-import { BaseRepository } from "@/domain/common/base.repository";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, Prisma } from "@prisma/client";
 
-export class OrderRepositoryPrisma extends BaseRepository<typeof prisma.order> {
-  constructor() {
-    super(prisma.order);
-  }
-
+export class OrderRepositoryPrisma {
   async listAll(params?: {
     status?: OrderStatus;
     search?: string;
     skip?: number;
     take?: number;
   }) {
+    const where: Prisma.OrderWhereInput = {};
+    if (params?.status) where.status = params.status;
+    if (params?.search) {
+      where.OR = [
+        { receivingAddr: { contains: params.search, mode: "insensitive" } },
+        { paymentAddr: { contains: params.search, mode: "insensitive" } },
+        { txHash: { contains: params.search, mode: "insensitive" } },
+      ];
+    }
     return prisma.order.findMany({
-      where: {
-        status: params?.status,
-        OR: params?.search
-          ? [
-              { coinToBuy: { symbol: { contains: params.search, mode: "insensitive" } } },
-              { payWith: { symbol: { contains: params.search, mode: "insensitive" } } },
-              { id: { contains: params.search, mode: "insensitive" } }
-            ]
-          : undefined
-      },
+      where,
+      skip: params?.skip,
+      take: params?.take ?? 50,
+      orderBy: { createdAt: "desc" },
       include: {
         coinToBuy: true,
         buyNetwork: true,
         payWith: true,
-        payNetwork: true
+        payNetwork: true,
+        walletPoolLegacy: true,
       },
-      orderBy: { createdAt: "desc" },
-      skip: params?.skip,
-      take: params?.take
     });
   }
 
@@ -43,33 +39,17 @@ export class OrderRepositoryPrisma extends BaseRepository<typeof prisma.order> {
         coinToBuy: true,
         buyNetwork: true,
         payWith: true,
-        payNetwork: true
-      }
+        payNetwork: true,
+        walletPoolLegacy: true,
+      },
     });
   }
 
-  async createOrder(data: any) {
+  async createOrder(data: Prisma.OrderUncheckedCreateInput) {
     return prisma.order.create({ data });
   }
 
-  async updateOrder(id: string, data: any) {
+  async updateOrder(id: string, data: Prisma.OrderUncheckedUpdateInput) {
     return prisma.order.update({ where: { id }, data });
-  }
-
-  async deleteOrder(id: string) {
-    return prisma.order.delete({ where: { id } });
-  }
-
-  async listByClient(clientId: string) {
-    return prisma.order.findMany({
-      where: { /* nanti tambahkan relasi user jika ada */ },
-      orderBy: { createdAt: "desc" },
-      include: {
-        coinToBuy: true,
-        buyNetwork: true,
-        payWith: true,
-        payNetwork: true
-      }
-    });
   }
 }

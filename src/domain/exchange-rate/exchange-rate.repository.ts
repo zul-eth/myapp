@@ -1,45 +1,54 @@
 import { prisma } from "@/lib/prisma";
-import { BaseRepository } from "@/domain/common/base.repository";
 
-export class ExchangeRateRepositoryPrisma extends BaseRepository<typeof prisma.exchangeRate> {
-  constructor() {
-    super(prisma.exchangeRate);
-  }
-
+export class ExchangeRateRepositoryPrisma {
   async listAll() {
     return prisma.exchangeRate.findMany({
+      orderBy: { createdAt: "desc" },
       include: {
         buyCoin: true,
         buyNetwork: true,
         payCoin: true,
-        payNetwork: true
+        payNetwork: true,
       },
-      orderBy: { createdAt: "desc" }
     });
   }
 
-  async createExchangeRate(data: {
+  async findById(id: string) {
+    return prisma.exchangeRate.findUnique({
+      where: { id },
+      include: {
+        buyCoin: true,
+        buyNetwork: true,
+        payCoin: true,
+        payNetwork: true,
+      },
+    });
+  }
+
+  async findLatestByComposite(params: {
     buyCoinId: string;
     buyNetworkId: string;
     payCoinId: string;
     payNetworkId: string;
-    rate: number;
-    updatedBy?: string;
   }) {
-    const exists = await prisma.exchangeRate.findFirst({
-      where: {
-        buyCoinId: data.buyCoinId,
-        buyNetworkId: data.buyNetworkId,
-        payCoinId: data.payCoinId,
-        payNetworkId: data.payNetworkId
-      }
+    const { buyCoinId, buyNetworkId, payCoinId, payNetworkId } = params;
+    return prisma.exchangeRate.findFirst({
+      where: { buyCoinId, buyNetworkId, payCoinId, payNetworkId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        buyCoin: true,
+        buyNetwork: true,
+        payCoin: true,
+        payNetwork: true,
+      },
     });
-    if (exists) throw new Error("Exchange rate ini sudah ada");
+  }
 
+  async createExchangeRate(data: any) {
     return prisma.exchangeRate.create({ data });
   }
 
-  async updateExchangeRate(id: string, data: Partial<{ rate: number; updatedBy?: string }>) {
+  async updateExchangeRate(id: string, data: any) {
     return prisma.exchangeRate.update({ where: { id }, data });
   }
 

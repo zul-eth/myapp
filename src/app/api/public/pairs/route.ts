@@ -1,41 +1,58 @@
+// src/app/api/public/pairs/route.ts
 import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
 
 export async function GET() {
   const app = getApplicationManager();
   try {
-    const pairs = await app.exchangeRate.repository.prisma.exchangeRate.findMany({
-      where: {
-        buyCoinId: { not: null },
-        buyNetworkId: { not: null },
-        payCoinId: { not: null },
-        payNetworkId: { not: null }
-      },
-      include: {
-        buyCoin: true,
-        buyNetwork: true,
-        payCoin: true,
-        payNetwork: true
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    // Ambil semua pair lengkap relasinya
+    const pairs = await app.exchangeRate.service.listAll();
 
-    const formatted = pairs
-      .filter(p => p.buyCoin && p.buyNetwork && p.payCoin && p.payNetwork) // pastikan semua relasi ada
-      .map(p => ({
+    // Format respons yang lebih deskriptif untuk UI
+    const formatted = pairs.map((p: any) => {
+      const buy = {
+        coin: {
+          id: p.buyCoinId,
+          symbol: p.buyCoin.symbol,
+          name: p.buyCoin.name,
+          logoUrl: p.buyCoin.logoUrl ?? null,
+        },
+        network: {
+          id: p.buyNetworkId,
+          name: p.buyNetwork.name,
+          family: p.buyNetwork.family, // ChainFamily
+        },
+      };
+      const pay = {
+        coin: {
+          id: p.payCoinId,
+          symbol: p.payCoin.symbol,
+          name: p.payCoin.name,
+          logoUrl: p.payCoin.logoUrl ?? null,
+        },
+        network: {
+          id: p.payNetworkId,
+          name: p.payNetwork.name,
+          family: p.payNetwork.family, // ChainFamily
+        },
+      };
+
+      // Label panjang & pendek agar mudah dibaca di mobile
+      const labelLong =
+        `Beli ${buy.coin.symbol} di ${buy.network.name} • Bayar ${pay.coin.symbol} di ${pay.network.name} • ` +
+        `1 ${buy.coin.symbol} = ${p.rate} ${pay.coin.symbol}`;
+      const labelShort =
+        `${buy.coin.symbol}/${pay.coin.symbol} • ${pay.network.name} • rate ${p.rate}`;
+
+      return {
         id: p.id,
-        buyCoinId: p.buyCoin.id,
-        buyCoinSymbol: p.buyCoin.symbol,
-        buyCoinName: p.buyCoin.name,
-        buyNetworkId: p.buyNetwork.id,
-        buyNetworkName: p.buyNetwork.name,
-        payCoinId: p.payCoin.id,
-        payCoinSymbol: p.payCoin.symbol,
-        payCoinName: p.payCoin.name,
-        payNetworkId: p.payNetwork.id,
-        payNetworkName: p.payNetwork.name,
-        rate: p.rate
-      }));
+        rate: p.rate,
+        buy,
+        pay,
+        labelLong,
+        labelShort,
+      };
+    });
 
     return NextResponse.json(formatted);
   } catch (e: any) {

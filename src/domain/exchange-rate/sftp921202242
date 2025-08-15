@@ -36,72 +36,80 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OrderRepositoryPrisma = void 0;
+exports.ExchangeRateRepositoryPrisma = void 0;
 var prisma_1 = require("@/lib/prisma");
-var OrderRepositoryPrisma = /** @class */ (function () {
-    function OrderRepositoryPrisma() {
+var ExchangeRateRepositoryPrisma = /** @class */ (function () {
+    function ExchangeRateRepositoryPrisma() {
     }
-    OrderRepositoryPrisma.prototype.listAll = function (params) {
-        var _a;
+    ExchangeRateRepositoryPrisma.prototype.listAll = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var where;
-            return __generator(this, function (_b) {
-                where = {};
-                if (params === null || params === void 0 ? void 0 : params.status)
-                    where.status = params.status;
-                if (params === null || params === void 0 ? void 0 : params.search) {
-                    where.OR = [
-                        { receivingAddr: { contains: params.search, mode: "insensitive" } },
-                        { paymentAddr: { contains: params.search, mode: "insensitive" } },
-                        { txHash: { contains: params.search, mode: "insensitive" } },
-                    ];
-                }
-                return [2 /*return*/, prisma_1.prisma.order.findMany({
-                        where: where,
-                        skip: params === null || params === void 0 ? void 0 : params.skip,
-                        take: (_a = params === null || params === void 0 ? void 0 : params.take) !== null && _a !== void 0 ? _a : 50,
+            return __generator(this, function (_a) {
+                return [2 /*return*/, prisma_1.prisma.exchangeRate.findMany({
                         orderBy: { createdAt: "desc" },
                         include: {
-                            coinToBuy: true,
+                            buyCoin: true,
                             buyNetwork: true,
-                            payWith: true,
+                            payCoin: true,
                             payNetwork: true,
-                            walletPoolLegacy: true,
                         },
                     })];
             });
         });
     };
-    OrderRepositoryPrisma.prototype.findById = function (id) {
+    ExchangeRateRepositoryPrisma.prototype.findById = function (id) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, prisma_1.prisma.order.findUnique({
+                return [2 /*return*/, prisma_1.prisma.exchangeRate.findUnique({
                         where: { id: id },
                         include: {
-                            coinToBuy: true,
+                            buyCoin: true,
                             buyNetwork: true,
-                            payWith: true,
+                            payCoin: true,
                             payNetwork: true,
-                            walletPoolLegacy: true,
                         },
                     })];
             });
         });
     };
-    OrderRepositoryPrisma.prototype.createOrder = function (data) {
+    ExchangeRateRepositoryPrisma.prototype.findLatestByComposite = function (params) {
         return __awaiter(this, void 0, void 0, function () {
+            var buyCoinId, buyNetworkId, payCoinId, payNetworkId;
             return __generator(this, function (_a) {
-                return [2 /*return*/, prisma_1.prisma.order.create({ data: data })];
+                buyCoinId = params.buyCoinId, buyNetworkId = params.buyNetworkId, payCoinId = params.payCoinId, payNetworkId = params.payNetworkId;
+                return [2 /*return*/, prisma_1.prisma.exchangeRate.findFirst({
+                        where: { buyCoinId: buyCoinId, buyNetworkId: buyNetworkId, payCoinId: payCoinId, payNetworkId: payNetworkId },
+                        orderBy: { createdAt: "desc" },
+                        include: {
+                            buyCoin: true,
+                            buyNetwork: true,
+                            payCoin: true,
+                            payNetwork: true,
+                        },
+                    })];
             });
         });
     };
-    OrderRepositoryPrisma.prototype.updateOrder = function (id, data) {
+    ExchangeRateRepositoryPrisma.prototype.createExchangeRate = function (data) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, prisma_1.prisma.order.update({ where: { id: id }, data: data })];
+                return [2 /*return*/, prisma_1.prisma.exchangeRate.create({ data: data })];
             });
         });
     };
-    return OrderRepositoryPrisma;
+    ExchangeRateRepositoryPrisma.prototype.updateExchangeRate = function (id, data) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, prisma_1.prisma.exchangeRate.update({ where: { id: id }, data: data })];
+            });
+        });
+    };
+    ExchangeRateRepositoryPrisma.prototype.deleteExchangeRate = function (id) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, prisma_1.prisma.exchangeRate.delete({ where: { id: id } })];
+            });
+        });
+    };
+    return ExchangeRateRepositoryPrisma;
 }());
-exports.OrderRepositoryPrisma = OrderRepositoryPrisma;
+exports.ExchangeRateRepositoryPrisma = ExchangeRateRepositoryPrisma;

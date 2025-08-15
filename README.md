@@ -67,3 +67,50 @@ Entity Method Endpoint Fungsi
 # payment metod
 - evm  native & erc20 (eth, base, op, arb ,pol, bnb | usdt,usdc,dai)
 - tron, solana, eos, xrp, doge, sui, ltc, ton
+- 
+
+Pisahkan Order dari detail pembayaran.
+Tambahkan Payment (status, tx, konfirmasi, memo/tag, dll.) dan WebhookEvent (idempotensi).
+
+Order.status fokus ke bisnis; status kripto pindah ke Payment.status.
+
+Simpan requiredConfirmations per Network atau per Payment.
+
+Tambahan/Perubahan Skema
+
+1) Enum status pembayaran (terpisah dari Order)
+2) Tabel Payment (inti verifikasi on-chain)
+3) Opsional: tabel untuk event webhook (idempoten & audit)
+4) Sedikit merapikan Order
+Pindahkan txHash, confirmations, dan flag on-chain ke Payment.
+Order cukup simpan alamat/memo yang diberikan ke user (sumbernya bisa dari HD pool lama atau service alamat baru).
+Status UNDERPAID sebaiknya di Payment, bukan Order.
+5) Menambahkan parameter jaringan (konfirmasi & explorer)
+6) Adapter memo/tag per jaringan
+Tambah index untuk validasi cepat:
+7) HD address pool (legacy) → alokasi alamat yang lebih tegas
+Tambah indeks @@index([chain, isUsed])
+Simpan juga networkId jika chain yang sama punya beberapa network.
+
+
+Alur Praktik Terbaik (mengikat ke skema)
+
+1. Create Order
+Buat Order (WAITING_PAYMENT), generate paymentAddr/paymentMemo.
+Buat Payment dengan status=NOT_STARTED, isi requiredConfirmations default dari Network.
+
+2. Terima Webhook
+Simpan ke WebhookEvent (idempoten: externalId, payloadHash).
+Upsert Payment:
+Isi txHash, fromAddress, toAddress, amountRaw, assetType/contract.
+Set status=DETECTED atau CONFIRMING bila sudah valid & konfirmasi > 0.
+Update Order.status=WAITING_CONFIRMATION.
+
+3. Worker Verifikasi (RPC)
+Validasi alamat tujuan == Payment.payToAddress (dan memo bila ada).
+Cek token (kontrak) & amountRaw >= expected (toleransi fee bila perlu).
+Hitung konfirmasi.
+< N → CONFIRMING
+>= N → CONFIRMED, confirmedAt=now(), increment Order.receivedAmount, set Order.status=CONFIRMED.
+4. Expiry
+Job terjadwal: kalau Order.expiresAt < now() dan Payment.status belum CONFIRMED, set Order.EXPIRED.

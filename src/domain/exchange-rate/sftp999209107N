@@ -36,35 +36,53 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PATCH = void 0;
-var server_1 = require("next/server");
-var core_1 = require("@/core");
-function PATCH(req, _a) {
-    var params = _a.params;
-    return __awaiter(this, void 0, void 0, function () {
-        var id, body, app, updated, e_1;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
-                case 0: return [4 /*yield*/, params];
-                case 1:
-                    id = (_b.sent()).id;
-                    return [4 /*yield*/, req.json()];
-                case 2:
-                    body = _b.sent();
-                    app = (0, core_1.getApplicationManager)();
-                    _b.label = 3;
-                case 3:
-                    _b.trys.push([3, 5, , 6]);
-                    return [4 /*yield*/, app.order.service.update(id, body)];
-                case 4:
-                    updated = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(updated)];
-                case 5:
-                    e_1 = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 400 })];
-                case 6: return [2 /*return*/];
-            }
+exports.ExchangeRateService = void 0;
+var ExchangeRateService = /** @class */ (function () {
+    function ExchangeRateService(repo) {
+        this.repo = repo;
+    }
+    ExchangeRateService.prototype.listAll = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.listAll()];
+            });
         });
-    });
-}
-exports.PATCH = PATCH;
+    };
+    ExchangeRateService.prototype.getById = function (id) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.findById(id)];
+            });
+        });
+    };
+    ExchangeRateService.prototype.getLatest = function (params) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.findLatestByComposite(params)];
+            });
+        });
+    };
+    ExchangeRateService.prototype.create = function (data) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.createExchangeRate(data)];
+            });
+        });
+    };
+    ExchangeRateService.prototype.update = function (id, data) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.updateExchangeRate(id, data)];
+            });
+        });
+    };
+    ExchangeRateService.prototype.delete = function (id) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.deleteExchangeRate(id)];
+            });
+        });
+    };
+    return ExchangeRateService;
+}());
+exports.ExchangeRateService = ExchangeRateService;

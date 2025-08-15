@@ -36,28 +36,28 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GET = void 0;
+exports.PUT = exports.GET = void 0;
 var server_1 = require("next/server");
 var core_1 = require("@/core");
-function GET(_, _a) {
-    var params = _a.params;
+function GET(_, ctx) {
     return __awaiter(this, void 0, void 0, function () {
-        var id, app, order, e_1;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
-                case 0: return [4 /*yield*/, params];
-                case 1:
-                    id = (_b.sent()).id;
+        var app, id, order, e_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
                     app = (0, core_1.getApplicationManager)();
-                    _b.label = 2;
+                    return [4 /*yield*/, ctx.params];
+                case 1:
+                    id = (_a.sent()).id;
+                    _a.label = 2;
                 case 2:
-                    _b.trys.push([2, 4, , 5]);
-                    return [4 /*yield*/, app.order.service.getDetail(id)];
+                    _a.trys.push([2, 4, , 5]);
+                    return [4 /*yield*/, app.order.service.get(id)];
                 case 3:
-                    order = _b.sent();
+                    order = _a.sent();
                     return [2 /*return*/, server_1.NextResponse.json(order)];
                 case 4:
-                    e_1 = _b.sent();
+                    e_1 = _a.sent();
                     return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 404 })];
                 case 5: return [2 /*return*/];
             }
@@ -65,3 +65,32 @@ function GET(_, _a) {
     });
 }
 exports.GET = GET;
+function PUT(req, ctx) {
+    return __awaiter(this, void 0, void 0, function () {
+        var app, patch, id, updated, e_2;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    app = (0, core_1.getApplicationManager)();
+                    return [4 /*yield*/, req.json()];
+                case 1:
+                    patch = _a.sent();
+                    return [4 /*yield*/, ctx.params];
+                case 2:
+                    id = (_a.sent()).id;
+                    _a.label = 3;
+                case 3:
+                    _a.trys.push([3, 5, , 6]);
+                    return [4 /*yield*/, app.order.service.update(id, patch)];
+                case 4:
+                    updated = _a.sent();
+                    return [2 /*return*/, server_1.NextResponse.json(updated)];
+                case 5:
+                    e_2 = _a.sent();
+                    return [2 /*return*/, server_1.NextResponse.json({ error: e_2.message }, { status: 400 })];
+                case 6: return [2 /*return*/];
+            }
+        });
+    });
+}
+exports.PUT = PUT;

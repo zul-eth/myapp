@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getExchangeRates,
   createExchangeRate,
@@ -8,122 +8,163 @@ import {
   deleteExchangeRate
 } from "@/lib/api/exchangeRate";
 
+// Ambil daftar coin & network dari endpoint admin yang sudah ada di proyekmu:
+//   /api/admin/coins       -> name, symbol
+//   /api/admin/networks    -> name, family
+async function fetchCoins() {
+  const res = await fetch("/api/admin/coins", { cache: "no-store" });
+  return res.json();
+}
+async function fetchNetworks() {
+  const res = await fetch("/api/admin/networks", { cache: "no-store" });
+  return res.json();
+}
+
+const nf = (n: number | string) =>
+  new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 }).format(Number(n || 0));
+
 export default function AdminExchangeRatesPage() {
   const [exchangeRates, setExchangeRates] = useState<any[]>([]);
   const [coins, setCoins] = useState<any[]>([]);
   const [networks, setNetworks] = useState<any[]>([]);
   const [editing, setEditing] = useState<any | null>(null);
-
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState({
     buyCoinId: "",
     buyNetworkId: "",
     payCoinId: "",
     payNetworkId: "",
-    rate: 0,
-    updatedBy: ""
+    rate: "",
+    updatedBy: "",
   });
+  const [error, setError] = useState<string>("");
 
-  const loadData = async () => {
-    const [erData, coinData, netData] = await Promise.all([
-      getExchangeRates(),
-      fetch("/api/admin/coins").then(r => r.json()),
-      fetch("/api/admin/networks").then(r => r.json())
-    ]);
+  const coinById = useMemo(
+    () => Object.fromEntries(coins.map((c: any) => [c.id, c])),
+    [coins]
+  );
+  const netById = useMemo(
+    () => Object.fromEntries(networks.map((n: any) => [n.id, n])),
+    [networks]
+  );
 
-    setExchangeRates(erData);
-    setCoins(coinData);
-    setNetworks(netData);
+  async function reload() {
+    const [list, c, n] = await Promise.all([getExchangeRates(), fetchCoins(), fetchNetworks()]);
+    setExchangeRates(list);
+    setCoins(c);
+    setNetworks(n);
+  }
 
-    if (!editing) {
-      setFormData({
-        buyCoinId: coinData[0]?.id || "",
-        buyNetworkId: netData[0]?.id || "",
-        payCoinId: coinData[1]?.id || "",
-        payNetworkId: netData[1]?.id || "",
-        rate: 0,
-        updatedBy: ""
-      });
-    }
-  };
+  useEffect(() => { reload().catch(console.error); }, []);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const resetForm = () => {
+  function resetForm() {
     setEditing(null);
-    setFormData({
-      buyCoinId: coins[0]?.id || "",
-      buyNetworkId: networks[0]?.id || "",
-      payCoinId: coins[1]?.id || "",
-      payNetworkId: networks[1]?.id || "",
-      rate: 0,
-      updatedBy: ""
+    setForm({
+      buyCoinId: "",
+      buyNetworkId: "",
+      payCoinId: "",
+      payNetworkId: "",
+      rate: "",
+      updatedBy: "",
     });
-  };
+    setError("");
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editing) {
-      await updateExchangeRate(editing.id, formData);
-    } else {
-      await createExchangeRate(formData);
+  function setF<K extends keyof typeof form>(k: K, v: string) {
+    setForm((s) => ({ ...s, [k]: v }));
+  }
+
+  function validate() {
+    if (!form.buyCoinId || !form.buyNetworkId || !form.payCoinId || !form.payNetworkId) {
+      setError("Lengkapi semua kolom Buy/Pay (coin & network).");
+      return false;
     }
+    if (!form.rate || Number(form.rate) <= 0) {
+      setError("Rate harus > 0.");
+      return false;
+    }
+    setError("");
+    return true;
+  }
+
+  async function handleCreate() {
+    if (!validate()) return;
+    await createExchangeRate({
+      buyCoinId: form.buyCoinId,
+      buyNetworkId: form.buyNetworkId,
+      payCoinId: form.payCoinId,
+      payNetworkId: form.payNetworkId,
+      rate: Number(form.rate),
+      updatedBy: form.updatedBy || null,
+    });
+    await reload();
     resetForm();
-    loadData();
-  };
+  }
 
-  const handleEdit = (item: any) => {
-    setEditing(item);
-    setFormData({
-      buyCoinId: item.buyCoinId,
-      buyNetworkId: item.buyNetworkId,
-      payCoinId: item.payCoinId,
-      payNetworkId: item.payNetworkId,
-      rate: item.rate,
-      updatedBy: item.updatedBy || ""
+  async function handleUpdate() {
+    if (!editing) return;
+    if (!validate()) return;
+    await updateExchangeRate(editing.id, {
+      buyCoinId: form.buyCoinId,
+      buyNetworkId: form.buyNetworkId,
+      payCoinId: form.payCoinId,
+      payNetworkId: form.payNetworkId,
+      rate: Number(form.rate),
+      updatedBy: form.updatedBy || null,
     });
-  };
+    await reload();
+    resetForm();
+  }
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Hapus ExchangeRate ini?")) {
-      await deleteExchangeRate(id);
-      loadData();
-    }
-  };
+  async function handleDelete(id: string) {
+    if (!confirm("Hapus rate ini?")) return;
+    await deleteExchangeRate(id);
+    await reload();
+  }
+
+  function startEdit(er: any) {
+    setEditing(er);
+    setForm({
+      buyCoinId: er.buyCoinId,
+      buyNetworkId: er.buyNetworkId,
+      payCoinId: er.payCoinId,
+      payNetworkId: er.payNetworkId,
+      rate: String(er.rate),
+      updatedBy: er.updatedBy || "",
+    });
+  }
 
   return (
-    <div className="p-4 space-y-6">
-      <h1 className="text-2xl font-bold">Manajemen ExchangeRate</h1>
+    <div className="mx-auto max-w-5xl p-4 md:p-6">
+      <h1 className="mb-6 text-3xl font-bold">Manajemen ExchangeRate</h1>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-4 border p-4 rounded bg-gray-50">
-        <div className="grid grid-cols-2 gap-4">
-          {/* Buy Coin */}
+      {/* FORM */}
+      <div className="rounded border p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <label className="block font-medium">Buy Coin</label>
+            <label className="mb-1 block text-sm font-medium">Buy Coin</label>
             <select
-              value={formData.buyCoinId}
-              onChange={(e) => setFormData({ ...formData, buyCoinId: e.target.value })}
-              className="border rounded p-2 w-full"
+              className="w-full rounded border p-2"
+              value={form.buyCoinId}
+              onChange={(e) => setF("buyCoinId", e.target.value)}
             >
-              {coins.map((c) => (
+              <option value="">-- pilih --</option>
+              {coins.map((c: any) => (
                 <option key={c.id} value={c.id}>
-                  {c.symbol} - {c.name}
+                  {c.symbol} — {c.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Buy Network */}
           <div>
-            <label className="block font-medium">Buy Network</label>
+            <label className="mb-1 block text-sm font-medium">Buy Network</label>
             <select
-              value={formData.buyNetworkId}
-              onChange={(e) => setFormData({ ...formData, buyNetworkId: e.target.value })}
-              className="border rounded p-2 w-full"
+              className="w-full rounded border p-2"
+              value={form.buyNetworkId}
+              onChange={(e) => setF("buyNetworkId", e.target.value)}
             >
-              {networks.map((n) => (
+              <option value="">-- pilih --</option>
+              {networks.map((n: any) => (
                 <option key={n.id} value={n.id}>
                   {n.name} ({n.family})
                 </option>
@@ -131,115 +172,145 @@ export default function AdminExchangeRatesPage() {
             </select>
           </div>
 
-          {/* Pay Coin */}
           <div>
-            <label className="block font-medium">Pay Coin</label>
+            <label className="mb-1 block text-sm font-medium">Pay Coin</label>
             <select
-              value={formData.payCoinId}
-              onChange={(e) => setFormData({ ...formData, payCoinId: e.target.value })}
-              className="border rounded p-2 w-full"
+              className="w-full rounded border p-2"
+              value={form.payCoinId}
+              onChange={(e) => setF("payCoinId", e.target.value)}
             >
-              {coins.map((c) => (
+              <option value="">-- pilih --</option>
+              {coins.map((c: any) => (
                 <option key={c.id} value={c.id}>
-                  {c.symbol} - {c.name}
+                  {c.symbol} — {c.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Pay Network */}
           <div>
-            <label className="block font-medium">Pay Network</label>
+            <label className="mb-1 block text-sm font-medium">Pay Network</label>
             <select
-              value={formData.payNetworkId}
-              onChange={(e) => setFormData({ ...formData, payNetworkId: e.target.value })}
-              className="border rounded p-2 w-full"
+              className="w-full rounded border p-2"
+              value={form.payNetworkId}
+              onChange={(e) => setF("payNetworkId", e.target.value)}
             >
-              {networks.map((n) => (
+              <option value="">-- pilih --</option>
+              {networks.map((n: any) => (
                 <option key={n.id} value={n.id}>
                   {n.name} ({n.family})
                 </option>
               ))}
             </select>
           </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">Rate</label>
+            <input
+              className="w-full rounded border p-2"
+              inputMode="decimal"
+              type="number"
+              step="any"
+              value={form.rate}
+              onChange={(e) => setF("rate", e.target.value)}
+              placeholder="contoh: 1 atau 0.98"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">Updated By</label>
+            <input
+              className="w-full rounded border p-2"
+              value={form.updatedBy}
+              onChange={(e) => setF("updatedBy", e.target.value)}
+              placeholder="nama admin (opsional)"
+            />
+          </div>
         </div>
 
-        {/* Rate */}
-        <div>
-          <label className="block font-medium">Rate</label>
-          <input
-            type="number"
-            step="0.00000001"
-            value={formData.rate}
-            onChange={(e) => setFormData({ ...formData, rate: parseFloat(e.target.value) })}
-            className="border rounded p-2 w-full"
-          />
+        {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+
+        <div className="mt-4 flex gap-3">
+          {editing ? (
+            <>
+              <button onClick={handleUpdate} className="rounded bg-blue-600 px-4 py-2 text-white">
+                Simpan Perubahan
+              </button>
+              <button onClick={resetForm} className="rounded border px-4 py-2">
+                Batal
+              </button>
+            </>
+          ) : (
+            <button onClick={handleCreate} className="rounded bg-green-600 px-4 py-2 text-white">
+              Create
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* Updated By */}
-        <div>
-          <label className="block font-medium">Updated By</label>
-          <input
-            value={formData.updatedBy}
-            onChange={(e) => setFormData({ ...formData, updatedBy: e.target.value })}
-            className="border rounded p-2 w-full"
-          />
-        </div>
-
-        <button className="bg-blue-600 text-white px-4 py-2 rounded">
-          {editing ? "Update" : "Create"}
-        </button>
-        {editing && (
-          <button
-            type="button"
-            onClick={resetForm}
-            className="ml-2 bg-gray-400 text-white px-4 py-2 rounded"
-          >
-            Batal
-          </button>
-        )}
-      </form>
-
-      {/* Table */}
-      <table className="w-full border">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="border p-2">Buy Coin</th>
-            <th className="border p-2">Buy Network</th>
-            <th className="border p-2">Pay Coin</th>
-            <th className="border p-2">Pay Network</th>
-            <th className="border p-2">Rate</th>
-            <th className="border p-2">Updated By</th>
-            <th className="border p-2">Aksi</th>
-          </tr>
-        </thead>
-        <tbody>
-          {exchangeRates.map((er) => (
-            <tr key={er.id}>
-              <td className="border p-2">{er.buyCoin.symbol}</td>
-              <td className="border p-2">{er.buyNetwork.name}</td>
-              <td className="border p-2">{er.payCoin.symbol}</td>
-              <td className="border p-2">{er.payNetwork.name}</td>
-              <td className="border p-2">{er.rate}</td>
-              <td className="border p-2">{er.updatedBy || "-"}</td>
-              <td className="border p-2 space-x-2">
-                <button
-                  onClick={() => handleEdit(er)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(er.id)}
-                  className="bg-red-600 text-white px-2 py-1 rounded"
-                >
-                  Hapus
-                </button>
-              </td>
+      {/* TABLE */}
+      <div className="mt-6 overflow-x-auto rounded border">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="p-2 text-left">Buy</th>
+              <th className="p-2 text-left">Buy Network</th>
+              <th className="p-2 text-left">Pay</th>
+              <th className="p-2 text-left">Pay Network</th>
+              <th className="p-2 text-left">Rate</th>
+              <th className="p-2 text-left">Updated By</th>
+              <th className="p-2 text-left">Aksi</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {exchangeRates.map((er: any) => (
+              <tr key={er.id} className="border-t">
+                <td className="p-2">
+                  <div className="font-medium">{coinById[er.buyCoinId]?.symbol || "-"}</div>
+                  <div className="text-xs text-gray-500">{coinById[er.buyCoinId]?.name || "-"}</div>
+                </td>
+                <td className="p-2">
+                  <div className="font-medium">{netById[er.buyNetworkId]?.name || "-"}</div>
+                  <div className="text-xs text-gray-500">{netById[er.buyNetworkId]?.family || "-"}</div>
+                </td>
+                <td className="p-2">
+                  <div className="font-medium">{coinById[er.payCoinId]?.symbol || "-"}</div>
+                  <div className="text-xs text-gray-500">{coinById[er.payCoinId]?.name || "-"}</div>
+                </td>
+                <td className="p-2">
+                  <div className="font-medium">{netById[er.payNetworkId]?.name || "-"}</div>
+                  <div className="text-xs text-gray-500">{netById[er.payNetworkId]?.family || "-"}</div>
+                </td>
+                <td className="p-2">{nf(er.rate)}</td>
+                <td className="p-2">{er.updatedBy || "-"}</td>
+                <td className="p-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => startEdit(er)}
+                      className="rounded border px-3 py-1"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(er.id)}
+                      className="rounded bg-red-600 px-3 py-1 text-white"
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {exchangeRates.length === 0 && (
+              <tr>
+                <td className="p-4 text-center text-gray-500" colSpan={7}>
+                  Belum ada rate. Tambahkan di form di atas.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

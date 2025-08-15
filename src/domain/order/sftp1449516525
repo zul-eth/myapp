@@ -44,38 +44,134 @@ var OrderService = /** @class */ (function () {
         this.rateService = rateService;
         this.walletService = walletService;
     }
-    OrderService.prototype.create = function (data) {
+    /**
+     * Buat order dengan rate yang diambil langsung dari ExchangeRate.
+     * - Menimpa priceRate yang dikirim klien
+     * - Alokasikan payment address sesuai family jaringan bayar
+     * - Status awal: WAITING_PAYMENT
+     */
+    OrderService.prototype.create = function (input) {
+        var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var network, pool, order;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
+            var pair, amount, priceRate, chainFamily, wallet, defaultExpires, expiresAt, data, order;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
                     case 0:
-                        if (data.coinToBuyId === data.payWithId && data.buyNetworkId === data.payNetworkId) {
-                            throw new Error("Buy dan Pay tidak boleh sama pada network yang sama");
-                        }
-                        return [4 /*yield*/, this.repo.getNetworkById(data.payNetworkId)];
+                        pair = null;
+                        if (!("pairId" in input)) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this.rateService.getById(input.pairId)];
                     case 1:
-                        network = _a.sent();
-                        if (!network)
-                            throw new Error("Network not found");
-                        return [4 /*yield*/, this.walletService.getOrGenerateAddress(network.family)];
-                    case 2:
-                        pool = _a.sent();
-                        data.paymentAddr = pool.address;
-                        data.walletPoolLegacy = { connect: { id: pool.id } };
-                        data.status = client_1.OrderStatus.PENDING;
-                        return [4 /*yield*/, this.repo.createOrder(data)];
+                        pair = _b.sent();
+                        return [3 /*break*/, 4];
+                    case 2: return [4 /*yield*/, this.rateService.getLatest({
+                            buyCoinId: input.buyCoinId,
+                            buyNetworkId: input.buyNetworkId,
+                            payCoinId: input.payWithId,
+                            payNetworkId: input.payNetworkId,
+                        })];
                     case 3:
-                        order = _a.sent();
-                        return [4 /*yield*/, this.walletService.assignAddressToOrder(pool.id, order.id)];
+                        pair = _b.sent();
+                        _b.label = 4;
                     case 4:
-                        _a.sent();
-                        return [2 /*return*/, order];
+                        if (!pair)
+                            throw new Error("Exchange rate/pair tidak ditemukan");
+                        amount = Number(("amount" in input && input.amount) || 0);
+                        if (!amount || amount <= 0)
+                            throw new Error("amount harus > 0");
+                        priceRate = Number(pair.rate);
+                        if (!priceRate || priceRate <= 0)
+                            throw new Error("Rate tidak valid");
+                        chainFamily = pair.payNetwork.family;
+                        return [4 /*yield*/, this.walletService.getOrGenerateAddress(chainFamily)];
+                    case 5:
+                        wallet = _b.sent();
+                        defaultExpires = new Date(Date.now() + 15 * 60 * 1000);
+                        expiresAt = "expiresAt" in input && input.expiresAt ? input.expiresAt : defaultExpires;
+                        data = {
+                            coinToBuyId: pair.buyCoinId,
+                            buyNetworkId: pair.buyNetworkId,
+                            payWithId: pair.payCoinId,
+                            payNetworkId: pair.payNetworkId,
+                            amount: amount,
+                            priceRate: priceRate,
+                            status: client_1.OrderStatus.WAITING_PAYMENT,
+                            receivingAddr: input.receivingAddr,
+                            receivingMemo: (_a = input.receivingMemo) !== null && _a !== void 0 ? _a : null,
+                            paymentAddr: wallet.address,
+                            paymentMemo: null,
+                            expiresAt: expiresAt,
+                        };
+                        return [4 /*yield*/, this.repo.createOrder(data)];
+                    case 6:
+                        order = _b.sent();
+                        if (!wallet.id) return [3 /*break*/, 8];
+                        return [4 /*yield*/, this.walletService.assignAddressToOrder(wallet.id, order.id)];
+                    case 7:
+                        _b.sent();
+                        _b.label = 8;
+                    case 8: return [2 /*return*/, this.repo.findById(order.id)];
                 }
             });
         });
     };
-    OrderService.prototype.updateStatus = function (id, status) {
+    /**
+     * Update order. Jika pasangan/rate berubah → ambil rate terbaru.
+     * Rilis alamat saat status terminal.
+     */
+    OrderService.prototype.update = function (id, patch) {
+        var _a, _b, _c, _d, _e;
+        return __awaiter(this, void 0, void 0, function () {
+            var order, pair, fields, pair, updated;
+            return __generator(this, function (_f) {
+                switch (_f.label) {
+                    case 0: return [4 /*yield*/, this.repo.findById(id)];
+                    case 1:
+                        order = _f.sent();
+                        if (!order)
+                            throw new Error("Order tidak ditemukan");
+                        if (!(patch.pairId && typeof patch.pairId === "string")) return [3 /*break*/, 3];
+                        return [4 /*yield*/, this.rateService.getById(patch.pairId)];
+                    case 2:
+                        pair = _f.sent();
+                        if (!pair)
+                            throw new Error("Exchange rate/pair tidak ditemukan");
+                        patch.coinToBuyId = pair.buyCoinId;
+                        patch.buyNetworkId = pair.buyNetworkId;
+                        patch.payWithId = pair.payCoinId;
+                        patch.payNetworkId = pair.payNetworkId;
+                        patch.priceRate = pair.rate;
+                        _f.label = 3;
+                    case 3:
+                        fields = ["coinToBuyId", "buyNetworkId", "payWithId", "payNetworkId"];
+                        if (!fields.some(function (k) { return k in patch; })) return [3 /*break*/, 5];
+                        return [4 /*yield*/, this.rateService.getLatest({
+                                buyCoinId: String((_a = patch.coinToBuyId) !== null && _a !== void 0 ? _a : order.coinToBuyId),
+                                buyNetworkId: String((_b = patch.buyNetworkId) !== null && _b !== void 0 ? _b : order.buyNetworkId),
+                                payCoinId: String((_c = patch.payWithId) !== null && _c !== void 0 ? _c : order.payWithId),
+                                payNetworkId: String((_d = patch.payNetworkId) !== null && _d !== void 0 ? _d : order.payNetworkId),
+                            })];
+                    case 4:
+                        pair = _f.sent();
+                        if (!pair)
+                            throw new Error("Exchange rate/pair tidak ditemukan");
+                        patch.priceRate = pair.rate;
+                        _f.label = 5;
+                    case 5: return [4 /*yield*/, this.repo.updateOrder(id, patch)];
+                    case 6:
+                        updated = _f.sent();
+                        if (!("status" in patch &&
+                            [client_1.OrderStatus.COMPLETED, client_1.OrderStatus.EXPIRED, client_1.OrderStatus.FAILED].includes(patch.status))) return [3 /*break*/, 8];
+                        if (!((_e = order.walletPoolLegacy) === null || _e === void 0 ? void 0 : _e.id)) return [3 /*break*/, 8];
+                        return [4 /*yield*/, this.walletService.releaseAddress(order.walletPoolLegacy.id)];
+                    case 7:
+                        _f.sent();
+                        _f.label = 8;
+                    case 8: return [2 /*return*/, this.repo.findById(updated.id)];
+                }
+            });
+        });
+    };
+    OrderService.prototype.setStatus = function (id, status) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
             var order, updated;
@@ -85,7 +181,7 @@ var OrderService = /** @class */ (function () {
                     case 1:
                         order = _b.sent();
                         if (!order)
-                            throw new Error("Order not found");
+                            throw new Error("Order tidak ditemukan");
                         return [4 /*yield*/, this.repo.updateOrder(id, { status: status })];
                     case 2:
                         updated = _b.sent();
@@ -97,6 +193,28 @@ var OrderService = /** @class */ (function () {
                         _b.label = 4;
                     case 4: return [2 /*return*/, updated];
                 }
+            });
+        });
+    };
+    OrderService.prototype.get = function (id) {
+        return __awaiter(this, void 0, void 0, function () {
+            var o;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, this.repo.findById(id)];
+                    case 1:
+                        o = _a.sent();
+                        if (!o)
+                            throw new Error("Order tidak ditemukan");
+                        return [2 /*return*/, o];
+                }
+            });
+        });
+    };
+    OrderService.prototype.list = function (params) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.listAll(params)];
             });
         });
     };

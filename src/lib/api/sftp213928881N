@@ -36,22 +36,26 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clientUpdatePayment = exports.clientGetOrderStatus = exports.clientGetOrderDetail = exports.clientCreateOrder = exports.adminDeleteOrder = exports.adminUpdateOrder = exports.adminCreateOrder = exports.adminGetOrders = void 0;
+exports.clientCancelOrder = exports.clientUpdatePayment = exports.clientGetOrderStatus = exports.clientGetOrderDetail = exports.clientCreateOrder = exports.adminDeleteOrder = exports.adminUpdateOrder = exports.adminCreateOrder = exports.adminGetOrders = void 0;
 var adminBase = "/api/admin/orders";
 var clientBase = "/api/client/orders";
-function parseJSON(res) {
-    return __awaiter(this, void 0, void 0, function () {
-        var text;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0: return [4 /*yield*/, res.text()];
-                case 1:
-                    text = _a.sent();
-                    return [2 /*return*/, text ? JSON.parse(text) : {}];
-            }
-        });
+var parseJSON = function (r) { return __awaiter(void 0, void 0, void 0, function () {
+    var t;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0: return [4 /*yield*/, r.text()];
+            case 1:
+                t = _a.sent();
+                try {
+                    return [2 /*return*/, JSON.parse(t)];
+                }
+                catch (_b) {
+                    return [2 /*return*/, { raw: t }];
+                }
+                return [2 /*return*/];
+        }
     });
-}
+}); };
 /* ---------------- ADMIN ---------------- */
 var adminGetOrders = function (params) { return __awaiter(void 0, void 0, void 0, function () {
     var query, res, _a;
@@ -204,3 +208,23 @@ var clientUpdatePayment = function (id, data) { return __awaiter(void 0, void 0,
     });
 }); };
 exports.clientUpdatePayment = clientUpdatePayment;
+var clientCancelOrder = function (id) { return __awaiter(void 0, void 0, void 0, function () {
+    var res, _a;
+    return __generator(this, function (_b) {
+        switch (_b.label) {
+            case 0: return [4 /*yield*/, fetch("/api/client/orders/".concat(id, "/status"), {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status: "FAILED" }),
+                })];
+            case 1:
+                res = _b.sent();
+                if (!!res.ok) return [3 /*break*/, 3];
+                _a = Error.bind;
+                return [4 /*yield*/, parseJSON(res)];
+            case 2: throw new (_a.apply(Error, [void 0, (_b.sent()).error || "Gagal membatalkan order"]))();
+            case 3: return [2 /*return*/, parseJSON(res)];
+        }
+    });
+}); };
+exports.clientCancelOrder = clientCancelOrder;

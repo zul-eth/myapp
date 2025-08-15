@@ -1,2 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.computePayAmount = void 0;
+// helper (dipakai di UI) untuk hitung jumlah bayar
+var computePayAmount = function (buyAmount, priceRate) {
+    return Number(buyAmount) * Number(priceRate);
+};
+exports.computePayAmount = computePayAmount;

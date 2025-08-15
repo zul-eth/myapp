@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Base look biar form nggak “telanjang” kalau Tailwind telat muat */
+:root { color-scheme: light; }
+html, body { height: 100%; }
+body { @apply bg-gray-50 text-gray-900; }
+
+/* Card */
+.card { @apply rounded-2xl border bg-white shadow-sm; }
+/* Section */
+.section { @apply rounded-xl border p-3; }
+/* Field label */
+.field-label { @apply block text-sm font-medium mb-1; }
+/* Input */
+.input {
+  @apply w-full rounded border p-3;
+}
+.input-lg {
+  @apply w-full rounded border p-3 text-2xl tracking-tight;
+}
+/* Pill button */
+.pill {
+  @apply inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm bg-white;
+}
+/* Error box */
+.error-box { @apply rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700; }

@@ -1,10 +1,10 @@
 const adminBase = "/api/admin/orders";
 const clientBase = "/api/client/orders";
 
-async function parseJSON(res: Response) {
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
-}
+const parseJSON = async (r: Response) => {
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { return { raw: t }; }
+};
 
 /* ---------------- ADMIN ---------------- */
 export const adminGetOrders = async (params?: { status?: string; search?: string }) => {
@@ -75,3 +75,17 @@ export const clientUpdatePayment = async (id: string, data: any) => {
   if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal memperbarui pembayaran");
   return parseJSON(res);
 };
+
+export const clientCancelOrder = async (id: string) => {
+  const res = await fetch(`/api/client/orders/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "FAILED" }),
+  });
+  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal membatalkan order");
+  return parseJSON(res);
+};
+
+
+
+

@@ -1,29 +1,7 @@
-export type OrderStatus = "PENDING" | "PAID" | "DELIVERED" | "CANCELLED";
+import type { Order as PrismaOrder, OrderStatus } from "@prisma/client";
 
-export type Order = {
-  id: string;
-  buyCoinId: string; buyNetworkId: string;
-  payCoinId: string; payNetworkId: string;
-  buyAmount: string | number;
-  payAmount: string | number;
-  priceRate: string | number;
-  address: string;           // input user
-  receivingAddr: string;     // kolom DB wajib
-  paymentAddr: string;       // ⬅️ kolom DB wajib (alamat pembayaran ke kita)
-  status: OrderStatus;
-  createdAt: string;
-  updatedAt?: string | null;
-};
+export type OrderDTO = PrismaOrder; // gunakan tipe Prisma agar 1:1 dengan DB
 
-export type CreateOrderDTO = {
-  id?: string;
-  buyCoinId: string; buyNetworkId: string;
-  payCoinId: string; payNetworkId: string;
-  buyAmount: string | number;
-  address: string;
-  receivingAddr?: string;    // auto = address
-  paymentAddr?: string;      // auto dari wallet
-  status?: OrderStatus;
-};
-
-export type UpdateOrderDTO = Partial<CreateOrderDTO> & { status?: OrderStatus };
+// helper (dipakai di UI) untuk hitung jumlah bayar
+export const computePayAmount = (buyAmount: number, priceRate: number) =>
+  Number(buyAmount) * Number(priceRate);
