@@ -1,127 +1,106 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { clientCreateOrder } from "@/lib/api/order";
 
 export default function NewOrderPage() {
-  const [coins, setCoins] = useState<any[]>([]);
-  const [networks, setNetworks] = useState<any[]>([]);
+  const [pairs, setPairs] = useState<any[]>([]);
+  const [selectedPairId, setSelectedPairId] = useState("");
   const [formData, setFormData] = useState({
-    coinToBuyId: "",
-    buyNetworkId: "",
-    payWithId: "",
-    payNetworkId: "",
-    amount: 0,
-    priceRate: 0,
-    receivingAddr: ""
+    amount: "",
+    receivingAddr: "",
+    receivingMemo: ""
   });
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/admin/coins").then(r => r.json()),
-      fetch("/api/admin/networks").then(r => r.json())
-    ]).then(([coinsData, netsData]) => {
-      setCoins(coinsData);
-      setNetworks(netsData);
-      setFormData(prev => ({
-        ...prev,
-        coinToBuyId: coinsData[0]?.id || "",
-        buyNetworkId: netsData[0]?.id || "",
-        payWithId: coinsData[1]?.id || "",
-        payNetworkId: netsData[1]?.id || ""
-      }));
-    });
+    fetch("/api/public/pairs")
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setPairs(data);
+          setSelectedPairId(data[0].id);
+        }
+      });
   }, []);
+
+  const selectedPair = pairs.find(p => p.id === selectedPairId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const order = await clientCreateOrder(formData);
+    if (!selectedPairId) return;
+
+    const payload = {
+      pairId: selectedPairId,
+      amount: Number(formData.amount),
+      receivingAddr: formData.receivingAddr,
+      receivingMemo: formData.receivingMemo
+    };
+
+    const order = await clientCreateOrder(payload);
     window.location.href = `/order/${order.id}`;
   };
 
   return (
-    <div className="p-4">
+    <div className="p-4 max-w-xl mx-auto">
       <h1 className="text-xl font-bold mb-4">Buat Order Baru</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        
-        {/* Coin to Buy */}
+        {/* Pilih Pair */}
         <div>
-          <label className="block mb-1">Coin to Buy</label>
+          <label>Pilih Pair</label>
           <select
-            value={formData.coinToBuyId}
-            onChange={(e) => setFormData({ ...formData, coinToBuyId: e.target.value })}
+            value={selectedPairId}
+            onChange={e => setSelectedPairId(e.target.value)}
             className="border p-2 w-full"
           >
-            {coins.map((c) => (
-              <option key={c.id} value={c.id}>{c.symbol}</option>
+            {pairs.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.buyCoinSymbol} ({p.buyNetworkName}) → {p.payCoinSymbol} ({p.payNetworkName})
+              </option>
             ))}
           </select>
         </div>
 
-        {/* Buy Network */}
-        <div>
-          <label className="block mb-1">Buy Network</label>
-          <select
-            value={formData.buyNetworkId}
-            onChange={(e) => setFormData({ ...formData, buyNetworkId: e.target.value })}
-            className="border p-2 w-full"
-          >
-            {networks.map((n) => (
-              <option key={n.id} value={n.id}>{n.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Pay With */}
-        <div>
-          <label className="block mb-1">Pay With</label>
-          <select
-            value={formData.payWithId}
-            onChange={(e) => setFormData({ ...formData, payWithId: e.target.value })}
-            className="border p-2 w-full"
-          >
-            {coins.map((c) => (
-              <option key={c.id} value={c.id}>{c.symbol}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Pay Network */}
-        <div>
-          <label className="block mb-1">Pay Network</label>
-          <select
-            value={formData.payNetworkId}
-            onChange={(e) => setFormData({ ...formData, payNetworkId: e.target.value })}
-            className="border p-2 w-full"
-          >
-            {networks.map((n) => (
-              <option key={n.id} value={n.id}>{n.name}</option>
-            ))}
-          </select>
-        </div>
+        {/* Rate */}
+        {selectedPair && (
+          <div>
+            <label>Price Rate</label>
+            <input type="number" value={selectedPair.rate} readOnly className="border p-2 w-full bg-gray-100" />
+          </div>
+        )}
 
         {/* Amount */}
         <div>
-          <label className="block mb-1">Amount</label>
+          <label>Amount</label>
           <input
             type="number"
             value={formData.amount}
-            onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
+            onChange={e => setFormData({ ...formData, amount: e.target.value })}
             className="border p-2 w-full"
+            required
           />
         </div>
 
         {/* Receiving Address */}
         <div>
-          <label className="block mb-1">Receiving Address</label>
+          <label>Receiving Address</label>
           <input
             value={formData.receivingAddr}
-            onChange={(e) => setFormData({ ...formData, receivingAddr: e.target.value })}
+            onChange={e => setFormData({ ...formData, receivingAddr: e.target.value })}
+            className="border p-2 w-full"
+            required
+          />
+        </div>
+
+        {/* Receiving Memo */}
+        <div>
+          <label>Receiving Memo (optional)</label>
+          <input
+            value={formData.receivingMemo}
+            onChange={e => setFormData({ ...formData, receivingMemo: e.target.value })}
             className="border p-2 w-full"
           />
         </div>
 
-        <button className="bg-blue-600 text-white px-4 py-2 rounded">
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
           Buat Order
         </button>
       </form>

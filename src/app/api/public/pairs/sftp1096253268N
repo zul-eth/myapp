@@ -36,59 +36,60 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.POST = void 0;
-// src/app/api/client/orders/route.ts
+exports.GET = void 0;
 var server_1 = require("next/server");
 var core_1 = require("@/core");
-function POST(req) {
+function GET() {
     return __awaiter(this, void 0, void 0, function () {
-        var app, body, required, _i, required_1, field, pair, orderData, order, e_1;
+        var app, pairs, formatted, e_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     app = (0, core_1.getApplicationManager)();
-                    return [4 /*yield*/, req.json()];
+                    _a.label = 1;
                 case 1:
-                    body = _a.sent();
-                    required = ["pairId", "amount", "receivingAddr"];
-                    for (_i = 0, required_1 = required; _i < required_1.length; _i++) {
-                        field = required_1[_i];
-                        if (!body[field]) {
-                            return [2 /*return*/, server_1.NextResponse.json({ error: "".concat(field, " wajib diisi") }, { status: 400 })];
-                        }
-                    }
-                    return [4 /*yield*/, app.exchangeRate.repository.prisma.exchangeRate.findUnique({
-                            where: { id: body.pairId },
-                            include: { buyCoin: true, buyNetwork: true, payCoin: true, payNetwork: true }
+                    _a.trys.push([1, 3, , 4]);
+                    return [4 /*yield*/, app.exchangeRate.repository.prisma.exchangeRate.findMany({
+                            where: {
+                                buyCoinId: { not: null },
+                                buyNetworkId: { not: null },
+                                payCoinId: { not: null },
+                                payNetworkId: { not: null }
+                            },
+                            include: {
+                                buyCoin: true,
+                                buyNetwork: true,
+                                payCoin: true,
+                                payNetwork: true
+                            },
+                            orderBy: { createdAt: "desc" }
                         })];
                 case 2:
-                    pair = _a.sent();
-                    if (!pair) {
-                        return [2 /*return*/, server_1.NextResponse.json({ error: "Pair tidak ditemukan" }, { status: 400 })];
-                    }
-                    orderData = {
-                        coinToBuyId: pair.buyCoinId,
-                        buyNetworkId: pair.buyNetworkId,
-                        payWithId: pair.payCoinId,
-                        payNetworkId: pair.payNetworkId,
-                        amount: Number(body.amount),
-                        priceRate: pair.rate,
-                        receivingAddr: body.receivingAddr,
-                        receivingMemo: body.receivingMemo || null
-                    };
-                    _a.label = 3;
+                    pairs = _a.sent();
+                    formatted = pairs
+                        .filter(function (p) { return p.buyCoin && p.buyNetwork && p.payCoin && p.payNetwork; }) // pastikan semua relasi ada
+                        .map(function (p) { return ({
+                        id: p.id,
+                        buyCoinId: p.buyCoin.id,
+                        buyCoinSymbol: p.buyCoin.symbol,
+                        buyCoinName: p.buyCoin.name,
+                        buyNetworkId: p.buyNetwork.id,
+                        buyNetworkName: p.buyNetwork.name,
+                        payCoinId: p.payCoin.id,
+                        payCoinSymbol: p.payCoin.symbol,
+                        payCoinName: p.payCoin.name,
+                        payNetworkId: p.payNetwork.id,
+                        payNetworkName: p.payNetwork.name,
+                        rate: p.rate
+                    }); });
+                    return [2 /*return*/, server_1.NextResponse.json(formatted)];
                 case 3:
-                    _a.trys.push([3, 5, , 6]);
-                    return [4 /*yield*/, app.order.service.create(orderData)];
-                case 4:
-                    order = _a.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(order, { status: 201 })];
-                case 5:
                     e_1 = _a.sent();
+                    console.error("Error GET /api/public/pairs:", e_1);
                     return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 500 })];
-                case 6: return [2 /*return*/];
+                case 4: return [2 /*return*/];
             }
         });
     });
 }
-exports.POST = POST;
+exports.GET = GET;

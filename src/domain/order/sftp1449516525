@@ -39,68 +39,64 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrderService = void 0;
 var client_1 = require("@prisma/client");
 var OrderService = /** @class */ (function () {
-    function OrderService(repo) {
+    function OrderService(repo, rateService, walletService) {
         this.repo = repo;
+        this.rateService = rateService;
+        this.walletService = walletService;
     }
-    OrderService.prototype.listAll = function (params) {
+    OrderService.prototype.create = function (data) {
         return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.repo.listAll(params)];
-            });
-        });
-    };
-    OrderService.prototype.getDetail = function (id) {
-        return __awaiter(this, void 0, void 0, function () {
-            var order;
+            var network, pool, order;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.repo.findById(id)];
+                    case 0:
+                        if (data.coinToBuyId === data.payWithId && data.buyNetworkId === data.payNetworkId) {
+                            throw new Error("Buy dan Pay tidak boleh sama pada network yang sama");
+                        }
+                        return [4 /*yield*/, this.repo.getNetworkById(data.payNetworkId)];
                     case 1:
+                        network = _a.sent();
+                        if (!network)
+                            throw new Error("Network not found");
+                        return [4 /*yield*/, this.walletService.getOrGenerateAddress(network.family)];
+                    case 2:
+                        pool = _a.sent();
+                        data.paymentAddr = pool.address;
+                        data.walletPoolLegacy = { connect: { id: pool.id } };
+                        data.status = client_1.OrderStatus.PENDING;
+                        return [4 /*yield*/, this.repo.createOrder(data)];
+                    case 3:
                         order = _a.sent();
-                        if (!order)
-                            throw new Error("Order tidak ditemukan");
+                        return [4 /*yield*/, this.walletService.assignAddressToOrder(pool.id, order.id)];
+                    case 4:
+                        _a.sent();
                         return [2 /*return*/, order];
                 }
             });
         });
     };
-    OrderService.prototype.create = function (data) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                // Validasi logis di sini
-                if (data.coinToBuyId === data.payWithId && data.buyNetworkId === data.payNetworkId) {
-                    throw new Error("Buy dan Pay tidak boleh sama pada network yang sama");
-                }
-                data.status = client_1.OrderStatus.PENDING;
-                return [2 /*return*/, this.repo.createOrder(data)];
-            });
-        });
-    };
-    OrderService.prototype.update = function (id, data) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.repo.updateOrder(id, data)];
-            });
-        });
-    };
     OrderService.prototype.updateStatus = function (id, status) {
+        var _a;
         return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.repo.updateOrder(id, { status: status })];
-            });
-        });
-    };
-    OrderService.prototype.delete = function (id) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.repo.deleteOrder(id)];
-            });
-        });
-    };
-    OrderService.prototype.listByClient = function (clientId) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.repo.listByClient(clientId)];
+            var order, updated;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0: return [4 /*yield*/, this.repo.findById(id)];
+                    case 1:
+                        order = _b.sent();
+                        if (!order)
+                            throw new Error("Order not found");
+                        return [4 /*yield*/, this.repo.updateOrder(id, { status: status })];
+                    case 2:
+                        updated = _b.sent();
+                        if (![client_1.OrderStatus.COMPLETED, client_1.OrderStatus.EXPIRED, client_1.OrderStatus.FAILED].includes(status)) return [3 /*break*/, 4];
+                        if (!((_a = order.walletPoolLegacy) === null || _a === void 0 ? void 0 : _a.id)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.walletService.releaseAddress(order.walletPoolLegacy.id)];
+                    case 3:
+                        _b.sent();
+                        _b.label = 4;
+                    case 4: return [2 /*return*/, updated];
+                }
             });
         });
     };

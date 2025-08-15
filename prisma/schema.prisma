@@ -27,12 +27,11 @@ enum AssetType {
 
 enum MemoKind {
   NONE
-  XRP_TAG   // angka 0..4294967295
+  XRP_TAG
   EOS_TEXT
   TON_TEXT
   OTHER
 }
-
 
 model Coin {
   id       String        @id @default(uuid())
@@ -67,8 +66,8 @@ model Network {
   payRates ExchangeRate[] @relation("PayRateNetwork")
   
   family   ChainFamily   @default(EVM) 
-  chainId  String?     // untuk EVM isi chainId, non‑EVM isi slug/network name
-  symbol   String?     // simbol native per network (ETH, MATIC, BNB, TRX, SOL, ...)
+  chainId  String?
+  symbol   String?
   rpcUrl   String?
   explorer String?
 
@@ -83,13 +82,11 @@ model CoinNetwork {
   coin    Coin    @relation(fields: [coinId], references: [id])
   network Network @relation(fields: [networkId], references: [id])
   
-  // Metadata aset
   assetType       AssetType   @default(NATIVE)
-  contractAddress String?     @db.VarChar(128) // hanya untuk EVM_ERC20
-  decimals        Int?        @default(18)     // EVM default 18; non‑EVM isi sesuai
+  contractAddress String?     @db.VarChar(128)
+  decimals        Int?        @default(18)
   symbolOverride  String?
 
-  // Memo/tag kebutuhan di network tsb (mis. XRP tag)
   memoKind        MemoKind    @default(NONE)
   memoLabel       String?
   memoRegex       String?
@@ -116,21 +113,26 @@ model PaymentOption {
 }
 
 model HdCursor {
-  id        String   @id @default(uuid())
-  chain     String   @unique // 'evm' | 'tron' | 'solana'
-  nextIndex Int      @default(0)
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  chain      String   @unique
+  nextIndex  Int      @default(0)
+  lastUsedAt DateTime?
+  updatedAt  DateTime @updatedAt
 }
 
 model WalletPoolLegacy {
   id              String @id @default(uuid())
-  chain           String // 'evm' | 'tron' | 'solana'
+  chain           String
   derivationIndex Int
   address         String @unique
 
-  isUsed        Boolean  @default(true) // selalu true untuk alokasi order
-  assignedOrder String?  @unique
-  createdAt     DateTime @default(now())
+  isUsed          Boolean @default(false)
+  assignedOrderId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  order Order? @relation("WalletPool_Order", fields: [assignedOrderId], references: [id])
 
   @@unique([chain, derivationIndex])
 }
@@ -138,13 +140,11 @@ model WalletPoolLegacy {
 model Order {
   id String @id @default(cuid())
 
-  // Coin & network yang dibeli (tujuan)
   coinToBuyId  String
   buyNetworkId String
   coinToBuy    Coin    @relation("BuyCoin", fields: [coinToBuyId], references: [id])
   buyNetwork   Network @relation("BuyNetwork", fields: [buyNetworkId], references: [id])
 
-  // Coin & network untuk pembayaran
   payWithId    String
   payNetworkId String
   payWith      Coin    @relation("PayCoin", fields: [payWithId], references: [id])
@@ -165,7 +165,9 @@ model Order {
   status        OrderStatus @default(PENDING)
   
   payoutHash      String?   @db.VarChar(128) @unique
-  payoutAt        DateTime? //, waktu submit payout
+  payoutAt        DateTime?
+
+  walletPoolLegacy WalletPoolLegacy? @relation("WalletPool_Order")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -186,7 +188,7 @@ model ExchangeRate {
   payNetwork Network @relation("PayRateNetwork", fields: [payNetworkId], references: [id])
 
   rate      Float
-  updatedBy String? // bisa email/nama admin yang mengubah
+  updatedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -194,12 +196,14 @@ model ExchangeRate {
 }
 
 enum OrderStatus {
-  PENDING // Order baru dibuat
-  WAITING_PAYMENT // Menunggu pembayaran (belum ada pembayaran)
-  UNDERPAID // Sudah ada pembayaran, tapi kurang dari total
-  WAITING_CONFIRMATION // Pembayaran diterima, menunggu konfirmasi jaringan
-  CONFIRMED // Pembayaran terkonfirmasi penuh
-  COMPLETED // Order berhasil dan selesai
-  EXPIRED // Melewati batas waktu, tidak dibayar atau masih kurang
-  FAILED // Order gagal karena alasan lain
+  PENDING
+  WAITING_PAYMENT
+  UNDERPAID
+  WAITING_CONFIRMATION
+  CONFIRMED
+  COMPLETED
+  EXPIRED
+  FAILED
 }
+
+

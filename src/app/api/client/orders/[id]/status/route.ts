@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { OrderStatus } from "@prisma/client";
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const app = getApplicationManager();
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
-    const order = await app.order.service.getDetail(id);
-    return NextResponse.json({ status: order.status });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 404 });
+    const { status } = await req.json();
+    const app = getApplicationManager();
+    const updatedOrder = await app.order.service.updateStatus(params.id, status as OrderStatus);
+    return NextResponse.json({ ok: true, order: updatedOrder });
+  } catch (error: any) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
   }
 }

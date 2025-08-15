@@ -1,41 +1,47 @@
 import { OrderRepositoryPrisma } from "./order.repository";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, ChainFamily } from "@prisma/client";
+import { WalletService } from "../wallet/wallet.service";
+import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 
 export class OrderService {
-  constructor(private readonly repo: OrderRepositoryPrisma) {}
-
-  async listAll(params?: any) {
-    return this.repo.listAll(params);
-  }
-
-  async getDetail(id: string) {
-    const order = await this.repo.findById(id);
-    if (!order) throw new Error("Order tidak ditemukan");
-    return order;
-  }
+  constructor(
+    private readonly repo: OrderRepositoryPrisma,
+    private readonly rateService: ExchangeRateService,
+    private readonly walletService: WalletService
+  ) {}
 
   async create(data: any) {
-    // Validasi logis di sini
     if (data.coinToBuyId === data.payWithId && data.buyNetworkId === data.payNetworkId) {
       throw new Error("Buy dan Pay tidak boleh sama pada network yang sama");
     }
-    data.status = OrderStatus.PENDING;
-    return this.repo.createOrder(data);
-  }
 
-  async update(id: string, data: any) {
-    return this.repo.updateOrder(id, data);
+    const network = await this.repo.getNetworkById(data.payNetworkId);
+    if (!network) throw new Error("Network not found");
+
+    const pool = await this.walletService.getOrGenerateAddress(network.family as ChainFamily);
+
+    data.paymentAddr = pool.address;
+    data.walletPoolLegacy = { connect: { id: pool.id } };
+    data.status = OrderStatus.PENDING;
+
+    const order = await this.repo.createOrder(data);
+    await this.walletService.assignAddressToOrder(pool.id, order.id);
+
+    return order;
   }
 
   async updateStatus(id: string, status: OrderStatus) {
-    return this.repo.updateOrder(id, { status });
-  }
+    const order = await this.repo.findById(id);
+    if (!order) throw new Error("Order not found");
 
-  async delete(id: string) {
-    return this.repo.deleteOrder(id);
-  }
+    const updated = await this.repo.updateOrder(id, { status });
 
-  async listByClient(clientId: string) {
-    return this.repo.listByClient(clientId);
+    if ([OrderStatus.COMPLETED, OrderStatus.EXPIRED, OrderStatus.FAILED].includes(status)) {
+      if (order.walletPoolLegacy?.id) {
+        await this.walletService.releaseAddress(order.walletPoolLegacy.id);
+      }
+    }
+
+    return updated;
   }
 }

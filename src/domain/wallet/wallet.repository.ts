@@ -1,15 +1,25 @@
 import { prisma } from "@/lib/prisma";
+import { ChainFamily } from "@prisma/client";
 
 export class WalletRepositoryPrisma {
-  async getPaymentAddress(coinId: string, networkId: string) {
-    const opt = await prisma.paymentOption.findUnique({
-      where: { coinId_networkId: { coinId, networkId } },
+  async getIdleAddress(chain: ChainFamily) {
+    return prisma.walletPoolLegacy.findFirst({
+      where: { chain, isUsed: false },
+      orderBy: { createdAt: "asc" }
     });
-    if (!opt) return null;
+  }
 
-    const wallet = await prisma.walletPoolLegacy.findFirst({
-      where: { assignedOrder: null, chain: networkId },
+  async assignAddressToOrder(addressId: string, orderId: string) {
+    return prisma.walletPoolLegacy.update({
+      where: { id: addressId },
+      data: { isUsed: true, assignedOrderId: orderId }
     });
-    return wallet ? wallet.address : null;
+  }
+
+  async releaseAddress(addressId: string) {
+    return prisma.walletPoolLegacy.update({
+      where: { id: addressId },
+      data: { isUsed: false, assignedOrderId: null }
+    });
   }
 }
