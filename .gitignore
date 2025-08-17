@@ -53,6 +53,4 @@ node_modules/.cache/
 *.tsbuildinfo
 
 # SFTP temp files
-*.sftp
-.sftp*
-*.sftpTemp
+sftp*

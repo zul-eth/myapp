@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { CoinUpdateSchema } from "@/lib/validation/coin";
+import { badRequest, conflict, json, notFound } from "@/lib/http/responses";
 
 export async function PUT(
   req: Request,
@@ -7,39 +8,46 @@ export async function PUT(
 ) {
   const { id } = await params;
   const app = getApplicationManager();
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
+
+  const parsed = CoinUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message ?? "Input tidak valid";
+    return badRequest(msg);
+  }
 
   try {
-    const updated = await app.coin.service.update(id, body);
-    return NextResponse.json(updated, { status: 200 });
+    const updated = await app.coin.service.update(id, parsed.data);
+    return json(updated, 200);
   } catch (e: any) {
-    if (e.message.includes("sudah ada")) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
+    const msg = e?.message ?? "Gagal mengubah coin";
+
+    // ✅ Map 'not found' dengan andal (pesan & code Prisma)
+    if (e?.code === "P2025" || /tidak ditemukan/i.test(msg)) {
+      return notFound(msg);
     }
-    if (e.code === "P2025") {
-      return NextResponse.json({ error: "Coin tidak ditemukan" }, { status: 404 });
+    if (/sudah ada/i.test(msg)) {
+      return conflict(msg);
     }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    return badRequest(msg);
   }
 }
 
 export async function DELETE(
-  _: Request,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const app = getApplicationManager();
 
   try {
-    const result = await app.coin.service.delete(id);
-    return NextResponse.json(result, { status: 200 });
+    const res = await app.coin.service.deleteHard(id);
+    return json(res, 200);
   } catch (e: any) {
-    if (e.code === "P2025") {
-      return NextResponse.json(
-        { success: true, type: "not-found", message: "Coin tidak ditemukan di DB" },
-        { status: 200 }
-      );
+    const msg = e?.message ?? "Gagal menghapus coin";
+    if (e?.code === "P2025" || /tidak ditemukan/i.test(msg)) {
+      return notFound(msg);
     }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    return badRequest(msg);
   }
 }

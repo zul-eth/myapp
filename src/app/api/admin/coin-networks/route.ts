@@ -1,26 +1,29 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { CoinNetworkCreateSchema } from "@/lib/validation/coin-network";
+import { badRequest, conflict, json } from "@/lib/http/responses";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const app = getApplicationManager();
-  return NextResponse.json(await app.coinNetwork.service.listAll());
+  return json(await app.coinNetwork.service.listAll());
 }
 
 export async function POST(req: Request) {
   const app = getApplicationManager();
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
-  if (!body.coinId || !body.networkId) {
-    return NextResponse.json({ error: "Coin dan Network wajib dipilih" }, { status: 400 });
-  }
+  const parsed = CoinNetworkCreateSchema.safeParse(body);
+  if (!parsed.success) return badRequest(parsed.error.issues?.[0]?.message ?? "Input tidak valid");
 
   try {
-    const created = await app.coinNetwork.service.create(body);
-    return NextResponse.json(created, { status: 201 });
+    const created = await app.coinNetwork.service.create(parsed.data);
+    return json(created, 201);
   } catch (e: any) {
-    if (e.message.includes("sudah ada")) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
+    // Unique ([coinId, networkId])
+    if (e.code === "P2002" || /unique/i.test(String(e?.message))) {
+      return conflict("Relasi coin-network sudah ada");
     }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    return badRequest(e?.message ?? "Gagal membuat relasi");
   }
 }

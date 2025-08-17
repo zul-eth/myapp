@@ -1,21 +1,21 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { ToggleActiveSchema } from "@/lib/validation/network";
+import { badRequest, json, notFound } from "@/lib/http/responses";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { isActive } = await req.json();
-
-  if (typeof isActive !== "boolean") {
-    return NextResponse.json({ error: "isActive harus boolean" }, { status: 400 });
-  }
-
   const app = getApplicationManager();
+  const body = await req.json().catch(() => ({}));
+
+  const parsed = ToggleActiveSchema.safeParse(body);
+  if (!parsed.success) return badRequest(parsed.error.issues?.[0]?.message ?? "Input tidak valid");
+
   try {
-    return NextResponse.json(await app.network.service.toggleActive(id, isActive));
+    const updated = await app.network.service.toggleActive(id, parsed.data.isActive);
+    return json(updated, 200);
   } catch (e: any) {
-    if (e.code === "P2025") {
-      return NextResponse.json({ error: "Network tidak ditemukan" }, { status: 404 });
-    }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    const msg = e?.message ?? "Gagal mengubah status";
+    if (/tidak ditemukan/i.test(msg)) return notFound(msg);
+    return badRequest(msg);
   }
 }

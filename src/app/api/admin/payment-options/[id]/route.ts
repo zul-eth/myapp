@@ -1,30 +1,35 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { PaymentOptionUpdateSchema } from "@/lib/validation/payment-option";
+import { badRequest, json, notFound } from "@/lib/http/responses";
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { isActive } = await req.json();
+  const app = getApplicationManager();
+  const body = await req.json().catch(() => ({}));
 
-  if (typeof isActive !== "boolean") {
-    return NextResponse.json({ error: "isActive harus boolean" }, { status: 400 });
+  const parsed = PaymentOptionUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message ?? "Input tidak valid";
+    return badRequest(msg);
   }
 
-  const app = getApplicationManager();
   try {
-    const updated = await app.paymentOption.service.update(id, { isActive });
-    return NextResponse.json(updated);
+    const updated = await app.paymentOption.service.update(id, parsed.data);
+    return json(updated, 200);
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    if (e?.code === "P2025") return notFound("PaymentOption tidak ditemukan");
+    return badRequest(e?.message ?? "Gagal mengubah payment option");
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const app = getApplicationManager();
   try {
-    const deleted = await app.paymentOption.service.delete(id);
-    return NextResponse.json(deleted);
+    const res = await app.paymentOption.service.delete(id);
+    return json(res, 200);
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    if (e?.code === "P2025") return notFound("PaymentOption tidak ditemukan");
+    return badRequest(e?.message ?? "Gagal menghapus payment option");
   }
 }

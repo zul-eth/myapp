@@ -1,26 +1,27 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { ExchangeRateCreateSchema } from "@/lib/validation/exchange-rate";
+import { badRequest, conflict, json } from "@/lib/http/responses";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const app = getApplicationManager();
-  return NextResponse.json(await app.exchangeRate.service.listAll());
+  return json(await app.exchangeRate.service.listAll());
 }
 
 export async function POST(req: Request) {
   const app = getApplicationManager();
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
 
-  if (!body.buyCoinId || !body.buyNetworkId || !body.payCoinId || !body.payNetworkId || !body.rate) {
-    return NextResponse.json({ error: "Semua field wajib diisi" }, { status: 400 });
-  }
+  const parsed = ExchangeRateCreateSchema.safeParse(body);
+  if (!parsed.success) return badRequest(parsed.error.issues?.[0]?.message ?? "Input tidak valid");
 
   try {
-    const created = await app.exchangeRate.service.create(body);
-    return NextResponse.json(created, { status: 201 });
+    const created = await app.exchangeRate.service.create(parsed.data);
+    return json(created, 201);
   } catch (e: any) {
-    if (e.message.includes("sudah ada")) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
-    }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    const msg = e?.message ?? "Gagal membuat exchange rate";
+    if (/sudah ada/i.test(msg) || e.code === "P2002") return conflict(msg);
+    return badRequest(msg);
   }
 }

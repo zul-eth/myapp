@@ -1,25 +1,24 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { ToggleActiveSchema } from "@/lib/validation/coin";
+import { badRequest, json, notFound } from "@/lib/http/responses";
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { isActive } = await req.json();
+  const body = await req.json().catch(() => ({}));
 
-  if (typeof isActive !== "boolean") {
-    return NextResponse.json({ error: "isActive harus boolean" }, { status: 400 });
+  const parsed = ToggleActiveSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message ?? "Input tidak valid";
+    return badRequest(msg);
   }
 
   const app = getApplicationManager();
   try {
-    const updated = await app.coin.service.toggleActive(id, isActive);
-    return NextResponse.json(updated, { status: 200 });
+    const updated = await app.coin.service.toggleActive(id, parsed.data.isActive);
+    return json(updated, 200);
   } catch (e: any) {
-    if (e.code === "P2025") {
-      return NextResponse.json({ error: "Coin tidak ditemukan" }, { status: 404 });
-    }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    const msg = e?.message ?? "Gagal mengubah status";
+    if (/tidak ditemukan/i.test(msg)) return notFound(msg);
+    return badRequest(msg);
   }
 }

@@ -1,28 +1,25 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { NetworkCreateSchema } from "@/lib/validation/network";
+import { badRequest, conflict, json } from "@/lib/http/responses";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const app = getApplicationManager();
-  return NextResponse.json(await app.network.service.listAll());
+  return json(await app.network.service.listAll());
 }
 
 export async function POST(req: Request) {
   const app = getApplicationManager();
-  const { name, logoUrl, family, chainId, symbol, rpcUrl, explorer } = await req.json();
-
-  if (!name || !family) {
-    return NextResponse.json({ error: "Name dan Family wajib diisi" }, { status: 400 });
-  }
-
+  const body = await req.json().catch(() => ({}));
+  const parsed = NetworkCreateSchema.safeParse(body);
+  if (!parsed.success) return badRequest(parsed.error.issues?.[0]?.message ?? "Input tidak valid");
   try {
-    const created = await app.network.service.create({
-      name, logoUrl, family, chainId, symbol, rpcUrl, explorer
-    });
-    return NextResponse.json(created, { status: 201 });
+    const created = await app.network.service.create(parsed.data);
+    return json(created, 201);
   } catch (e: any) {
-    if (e.message.includes("sudah ada")) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
-    }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    const msg = e?.message ?? "Gagal membuat network";
+    if (/sudah ada/i.test(msg)) return conflict(msg);
+    return badRequest(msg);
   }
 }

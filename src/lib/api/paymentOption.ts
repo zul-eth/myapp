@@ -1,38 +1,65 @@
 const base = "/api/admin/payment-options";
 
 async function parseJSON(res: Response) {
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+  const t = await res.text();
+  return t ? JSON.parse(t) : {};
 }
 
+// Admin
 export const getPaymentOptions = async () => {
   const res = await fetch(base, { cache: "no-store" });
-  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengambil daftar PaymentOption");
   return parseJSON(res);
 };
 
-export const createPaymentOption = async (data: { coinId: string; networkId: string }) => {
+export const createPaymentOption = async (data: any) => {
   const res = await fetch(base, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal membuat PaymentOption");
   return parseJSON(res);
 };
 
-export const togglePaymentOptionActive = async (id: string, isActive: boolean) => {
+export const updatePaymentOption = async (id: string, data: any) => {
   const res = await fetch(`${base}/${id}`, {
-    method: "PATCH",
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ isActive })
+    body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal mengubah status PaymentOption");
   return parseJSON(res);
 };
 
 export const deletePaymentOption = async (id: string) => {
   const res = await fetch(`${base}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error((await parseJSON(res)).error || "Gagal menghapus PaymentOption");
   return parseJSON(res);
+};
+
+export const togglePaymentOptionActive = async (id: string, isActive: boolean) => {
+  const res = await fetch(`${base}/${id}/active`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isActive }),
+  });
+  return parseJSON(res);
+};
+
+// Public
+export type PublicPaymentOptionParams = {
+  coinId?: string;
+  networkId?: string;
+  coinSymbol?: string;
+  networkSymbol?: string;
+};
+
+export const getPublicPaymentOptions = async (params: PublicPaymentOptionParams = {}) => {
+  const q = new URLSearchParams();
+  if (params.coinId) q.set("coinId", params.coinId);
+  if (params.networkId) q.set("networkId", params.networkId);
+  if (params.coinSymbol) q.set("coinSymbol", params.coinSymbol);
+  if (params.networkSymbol) q.set("networkSymbol", params.networkSymbol);
+
+  const url = `/api/public/payment-options${q.toString() ? `?${q.toString()}` : ""}`;
+  const res = await fetch(url, { next: { revalidate: 60 } });
+  const t = await res.text();
+  return t ? JSON.parse(t) : [];
 };

@@ -1,21 +1,33 @@
-import { CoinNetworkRepositoryPrisma } from "./coinNetwork.repository";
+import { CoinNetworkRepositoryPrisma, CreateCoinNetworkDTO, UpdateCoinNetworkDTO } from "./coin-network.repository";
 
 export class CoinNetworkService {
   constructor(private readonly repo: CoinNetworkRepositoryPrisma) {}
 
-  async listAll() {
+  listAll() {
     return this.repo.listAll();
   }
 
-  async create(data: any) {
-    return this.repo.createCoinNetwork(data);
+  create(input: CreateCoinNetworkDTO) {
+    return this.repo.create({
+      ...input,
+      contractAddress: input.contractAddress ?? null,
+      decimals: input.decimals ?? 18,
+      symbolOverride: input.symbolOverride ?? null,
+      memoLabel: input.memoLabel ?? null,
+      memoRegex: input.memoRegex ?? null,
+      isActive: input.isActive ?? true,
+    });
   }
 
-  async update(id: string, data: any) {
-    return this.repo.updateCoinNetwork(id, data);
+  update(id: string, input: UpdateCoinNetworkDTO) {
+    return this.repo.update(id, input);
   }
 
-  async delete(id: string) {
-    return this.repo.deleteCoinNetwork(id);
+  toggleActive(id: string, isActive: boolean) {
+    return this.repo.toggleActive(id, isActive);
+  }
+
+  delete(id: string) {
+    return this.repo.delete(id);
   }
 }

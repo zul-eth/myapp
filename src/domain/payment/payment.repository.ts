@@ -1,67 +1,35 @@
-import { Prisma, PrismaClient, PaymentStatus } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
+import { AssetType } from "@prisma/client";
 
-export class PaymentRepository {
-  async create(data: Prisma.PaymentUncheckedCreateInput) {
-    return prisma.payment.create({ data });
-  }
+export type CreatePaymentDTO = {
+  orderId: string;
+  coinId: string;
+  networkId: string;
+  payToAddress: string;
+  payToMemo?: string | null;
+  requiredConfirmations: number;
+  assetType?: AssetType | null;
+  decimals?: number | null;
+  assetContract?: string | null;
+};
 
-  async getByOrderId(orderId: string) {
-    return prisma.payment.findUnique({
-      where: { orderId },
-      include: {
-        coin: true,
-        network: true,
-        webhookEvents: { orderBy: { receivedAt: "desc" }, take: 10 },
-      },
-    });
-  }
-
-  async setStatus(orderId: string, status: PaymentStatus) {
-    return prisma.payment.update({
-      where: { orderId },
-      data: { status },
-    });
-  }
-
-  async setDetectedTx(orderId: string, params: {
-    txHash: string;
-    fromAddress?: string | null;
-    toAddress?: string | null;
-    amountRaw?: string | null;
-    decimals?: number | null;
-    assetType?: Prisma.AssetType | null;
-    assetContract?: string | null;
-  }) {
-    const { txHash, ...rest } = params;
-    return prisma.payment.update({
-      where: { orderId },
+export class PaymentRepositoryPrisma {
+  create(data: CreatePaymentDTO) {
+    return prisma.payment.create({
       data: {
-        txHash,
-        detectedAt: new Date(),
-        ...rest,
+        orderId: data.orderId,
+        coinId: data.coinId,
+        networkId: data.networkId,
+        payToAddress: data.payToAddress,
+        payToMemo: data.payToMemo ?? null,
+        requiredConfirmations: data.requiredConfirmations,
+        assetType: data.assetType ?? null,
+        decimals: data.decimals ?? null,
+        assetContract: data.assetContract ?? null,
       },
     });
   }
-
-  async setConfirmations(orderId: string, confirmations: number) {
-    return prisma.payment.update({
-      where: { orderId },
-      data: { confirmations },
-    });
-  }
-
-  async markConfirmed(orderId: string) {
-    return prisma.payment.update({
-      where: { orderId },
-      data: { status: PaymentStatus.CONFIRMED, confirmedAt: new Date() },
-    });
-  }
-
-  async attachWebhookEvent(paymentId: string, eventId: string) {
-    return prisma.payment.update({
-      where: { id: paymentId },
-      data: { lastWebhookEventId: eventId },
-    });
+  deleteByOrderId(orderId: string) {
+    return prisma.payment.delete({ where: { orderId } });
   }
 }

@@ -1,7 +1,0 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getApplicationManager = void 0;
-var application_manager_1 = require("./application-manager");
-var manager = null;
-var getApplicationManager = function () { return (manager !== null && manager !== void 0 ? manager : (manager = new application_manager_1.ApplicationManager())); };
-exports.getApplicationManager = getApplicationManager;

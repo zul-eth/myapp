@@ -1,111 +1,97 @@
 import { prisma } from "@/lib/prisma";
 import { BaseRepository } from "@/domain/common/base.repository";
-import { OrderStatus } from "@prisma/client";
+
+export type CreateCoinDTO = {
+  symbol: string;
+  name: string;
+  logoUrl?: string | null;
+};
+
+export type UpdateCoinDTO = Partial<CreateCoinDTO> & {
+  isActive?: boolean;
+};
 
 export class CoinRepositoryPrisma extends BaseRepository<typeof prisma.coin> {
   constructor() {
     super(prisma.coin);
   }
 
+  async findAllActive() {
+    return prisma.coin.findMany({
+      where: { isActive: true },
+      orderBy: { symbol: "asc" },
+    });
+  }
+
   async findAllClean() {
     return prisma.coin.findMany({
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
     });
   }
 
-  async createCoin(data: { symbol: string; name: string; logoUrl?: string }) {
-    const symbol = data.symbol.trim().toUpperCase();
-    const name = data.name.trim();
+  async findById(id: string) {
+    return prisma.coin.findUnique({ where: { id } });
+  }
 
-    if (!symbol) throw new Error("Symbol wajib diisi");
-    if (!name) throw new Error("Name wajib diisi");
+  async findBySymbol(symbol: string) {
+    return prisma.coin.findUnique({ where: { symbol } });
+  }
 
-    const exists = await prisma.coin.findFirst({
-      where: { symbol: { equals: symbol, mode: "insensitive" } }
-    });
-    if (exists) throw new Error(`Coin dengan symbol ${symbol} sudah ada`);
-
+  async createCoin(data: CreateCoinDTO) {
     return prisma.coin.create({
       data: {
-        symbol,
-        name,
-        logoUrl: data.logoUrl?.trim() || null
-      }
+        symbol: data.symbol,
+        name: data.name,
+        logoUrl: data.logoUrl ?? null,
+        // isActive default true oleh Prisma
+      },
     });
   }
 
-  async updateCoin(
-    id: string,
-    data: Partial<{ symbol: string; name: string; logoUrl?: string }>
-  ) {
-    const updateData: any = {};
-
-    if (data.symbol) {
-      const symbol = data.symbol.trim().toUpperCase();
-      const exists = await prisma.coin.findFirst({
-        where: { symbol: { equals: symbol, mode: "insensitive" }, NOT: { id } }
-      });
-      if (exists) throw new Error(`Coin dengan symbol ${symbol} sudah ada`);
-      updateData.symbol = symbol;
-    }
-
-    if (data.name) {
-      updateData.name = data.name.trim();
-    }
-
-    if (data.logoUrl !== undefined) {
-      updateData.logoUrl = data.logoUrl?.trim() || null;
-    }
-
+  async updateCoin(id: string, data: UpdateCoinDTO) {
     return prisma.coin.update({
       where: { id },
-      data: updateData
+      data: {
+        ...(data.symbol !== undefined ? { symbol: data.symbol } : {}),
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl ?? null } : {}),
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      },
     });
   }
 
-  async deleteCoin(id: string) {
-    // Status order yang dianggap aktif → coin tidak dihapus permanen
-    const activeStatuses = [
-      OrderStatus.PENDING,
-      OrderStatus.WAITING_PAYMENT,
-      OrderStatus.UNDERPAID,
-      OrderStatus.WAITING_CONFIRMATION
-    ];
-
-    const activeOrder = await prisma.order.findFirst({
-      where: {
-        OR: [{ coinToBuyId: id }, { payWithId: id }],
-        status: { in: activeStatuses }
-      }
+  async toggleActive(id: string, isActive: boolean) {
+    return prisma.coin.update({
+      where: { id },
+      data: { isActive },
     });
+  }
 
-    if (activeOrder) {
-      await prisma.coin.update({
-        where: { id },
-        data: { isActive: false }
+  /**
+   * Hard delete satu coin beserta semua relasinya agar konsisten dengan skema:
+   * - PaymentOption (coinId)
+   * - CoinNetwork (coinId)
+   * - Payment (coinId)
+   * - Order (coinToBuyId / payWithId)
+   * - ExchangeRate (buyCoinId / payCoinId)
+   */
+  async deleteCoinCascade(id: string) {
+    return prisma.$transaction(async (tx) => {
+      await tx.payment.deleteMany({ where: { coinId: id } });
+      await tx.paymentOption.deleteMany({ where: { coinId: id } });
+      await tx.coinNetwork.deleteMany({ where: { coinId: id } });
+
+      await tx.order.deleteMany({
+        where: { OR: [{ coinToBuyId: id }, { payWithId: id }] },
       });
-      return {
-        success: true,
-        type: "soft-delete",
-        message: "Coin dinonaktifkan karena masih digunakan di order aktif"
-      };
-    }
 
-    // Hard delete semua relasi sesuai model
-    await prisma.coinNetwork.deleteMany({ where: { coinId: id } });
-    await prisma.paymentOption.deleteMany({ where: { coinId: id } });
-    await prisma.order.deleteMany({
-      where: { OR: [{ coinToBuyId: id }, { payWithId: id }] }
-    });
-    await prisma.exchangeRate.deleteMany({
-      where: { OR: [{ buyCoinId: id }, { payCoinId: id }] }
-    });
-    await prisma.coin.delete({ where: { id } });
+      await tx.exchangeRate.deleteMany({
+        where: { OR: [{ buyCoinId: id }, { payCoinId: id }] },
+      });
 
-    return {
-      success: true,
-      type: "hard-delete",
-      message: "Coin dihapus permanen"
-    };
+      await tx.coin.delete({ where: { id } });
+
+      return { success: true, type: "hard-delete", message: "Coin dihapus permanen" };
+    });
   }
 }

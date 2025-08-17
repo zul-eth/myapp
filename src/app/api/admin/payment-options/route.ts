@@ -1,26 +1,31 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { PaymentOptionCreateSchema } from "@/lib/validation/payment-option";
+import { badRequest, conflict, json } from "@/lib/http/responses";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const app = getApplicationManager();
-  return NextResponse.json(await app.paymentOption.service.listAll());
+  const rows = await app.paymentOption.service.listAll();
+  return json(rows);
 }
 
 export async function POST(req: Request) {
   const app = getApplicationManager();
-  const { coinId, networkId } = await req.json();
+  const body = await req.json().catch(() => ({}));
 
-  if (!coinId || !networkId) {
-    return NextResponse.json({ error: "Coin dan Network wajib diisi" }, { status: 400 });
+  const parsed = PaymentOptionCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message ?? "Input tidak valid";
+    return badRequest(msg);
   }
 
   try {
-    const created = await app.paymentOption.service.create({ coinId, networkId });
-    return NextResponse.json(created, { status: 201 });
+    const created = await app.paymentOption.service.create(parsed.data);
+    return json(created, 201);
   } catch (e: any) {
-    if (e.message.includes("sudah ada")) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
-    }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    const msg = e?.message ?? "Gagal membuat payment option";
+    if (/sudah ada/i.test(msg) || e?.code === "P2002") return conflict(msg);
+    return badRequest(msg);
   }
 }

@@ -1,117 +1,93 @@
 import { prisma } from "@/lib/prisma";
 import { BaseRepository } from "@/domain/common/base.repository";
-import { OrderStatus } from "@prisma/client";
+import type { ChainFamily } from "@prisma/client";
+
+export type CreateNetworkDTO = {
+  symbol: string;
+  name: string;
+  family: ChainFamily; // ganti ke 'chainFamily' jika skema kamu pakai nama ini
+  isActive?: boolean;
+};
+export type UpdateNetworkDTO = Partial<CreateNetworkDTO>;
 
 export class NetworkRepositoryPrisma extends BaseRepository<typeof prisma.network> {
   constructor() {
     super(prisma.network);
   }
 
-  async findAllClean() {
+  findAll() {
+    return prisma.network.findMany({ orderBy: { symbol: "asc" } });
+  }
+
+  findAllActive() {
     return prisma.network.findMany({
-      orderBy: { createdAt: "desc" }
+      where: { isActive: true },
+      orderBy: { symbol: "asc" },
     });
   }
 
-  async createNetwork(data: {
-    name: string;
-    logoUrl?: string;
-    family: string;
-    chainId?: string;
-    symbol?: string;
-    rpcUrl?: string;
-    explorer?: string;
-  }) {
-    const name = data.name.trim();
-    if (!name) throw new Error("Name wajib diisi");
+  findById(id: string) {
+    return prisma.network.findUnique({ where: { id } });
+  }
 
-    const exists = await prisma.network.findFirst({
-      where: { name: { equals: name, mode: "insensitive" } }
-    });
-    if (exists) throw new Error(`Network dengan name ${name} sudah ada`);
+  findBySymbol(symbol: string) {
+    return prisma.network.findUnique({ where: { symbol } });
+  }
 
+  createNetwork(data: CreateNetworkDTO) {
     return prisma.network.create({
       data: {
-        name,
-        logoUrl: data.logoUrl?.trim() || null,
-        family: data.family,
-        chainId: data.chainId || null,
-        symbol: data.symbol || null,
-        rpcUrl: data.rpcUrl || null,
-        explorer: data.explorer || null
-      }
+        symbol: data.symbol,
+        name: data.name,
+        family: data.family,      // ganti ke 'chainFamily' jika perlu
+        isActive: data.isActive ?? true,
+      } as any,
     });
   }
 
-  async updateNetwork(
-    id: string,
-    data: Partial<{
-      name: string;
-      logoUrl?: string;
-      family?: string;
-      chainId?: string;
-      symbol?: string;
-      rpcUrl?: string;
-      explorer?: string;
-    }>
-  ) {
-    const updateData: any = {};
-
-    if (data.name) {
-      const name = data.name.trim();
-      const exists = await prisma.network.findFirst({
-        where: { name: { equals: name, mode: "insensitive" }, NOT: { id } }
-      });
-      if (exists) throw new Error(`Network dengan name ${name} sudah ada`);
-      updateData.name = name;
-    }
-
-    if (data.logoUrl !== undefined) updateData.logoUrl = data.logoUrl?.trim() || null;
-    if (data.family !== undefined) updateData.family = data.family;
-    if (data.chainId !== undefined) updateData.chainId = data.chainId;
-    if (data.symbol !== undefined) updateData.symbol = data.symbol;
-    if (data.rpcUrl !== undefined) updateData.rpcUrl = data.rpcUrl;
-    if (data.explorer !== undefined) updateData.explorer = data.explorer;
+  updateNetwork(id: string, data: UpdateNetworkDTO) {
+    const patch: any = {};
+    if (data.symbol !== undefined) patch.symbol = data.symbol;
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.family !== undefined) patch.family = data.family; // atau chainFamily
+    if (data.isActive !== undefined) patch.isActive = data.isActive;
 
     return prisma.network.update({
       where: { id },
-      data: updateData
+      data: patch,
     });
   }
 
-  async deleteNetwork(id: string) {
-    const activeStatuses = [
-      OrderStatus.PENDING,
-      OrderStatus.WAITING_PAYMENT,
-      OrderStatus.UNDERPAID,
-      OrderStatus.WAITING_CONFIRMATION
-    ];
-
-    const activeOrder = await prisma.order.findFirst({
-      where: {
-        OR: [{ buyNetworkId: id }, { payNetworkId: id }],
-        status: { in: activeStatuses }
-      }
+  toggleActive(id: string, isActive: boolean) {
+    return prisma.network.update({
+      where: { id },
+      data: { isActive },
     });
+  }
 
-    if (activeOrder) {
-      await prisma.network.update({
-        where: { id },
-        data: { isActive: false }
+  /**
+   * Hapus network + relasi dependent:
+   * - PaymentOption, CoinNetwork
+   * - Payment, Order (buyNetworkId/payNetworkId)
+   * - ExchangeRate (buyNetworkId/payNetworkId)
+   */
+  async deleteNetworkCascade(id: string) {
+    return prisma.$transaction(async (tx) => {
+      await tx.payment.deleteMany({ where: { networkId: id } });
+      await tx.paymentOption.deleteMany({ where: { networkId: id } });
+      await tx.coinNetwork.deleteMany({ where: { networkId: id } });
+
+      await tx.order.deleteMany({
+        where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] },
       });
-      return { success: true, type: "soft-delete", message: "Network dinonaktifkan karena masih digunakan di order aktif" };
-    }
 
-    await prisma.coinNetwork.deleteMany({ where: { networkId: id } });
-    await prisma.paymentOption.deleteMany({ where: { networkId: id } });
-    await prisma.order.deleteMany({
-      where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] }
-    });
-    await prisma.exchangeRate.deleteMany({
-      where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] }
-    });
-    await prisma.network.delete({ where: { id } });
+      await tx.exchangeRate.deleteMany({
+        where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] },
+      });
 
-    return { success: true, type: "hard-delete", message: "Network dihapus permanen" };
+      await tx.network.delete({ where: { id } });
+
+      return { success: true, type: "hard-delete", message: "Network dihapus permanen" };
+    });
   }
 }

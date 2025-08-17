@@ -37,37 +37,100 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WalletService = void 0;
-var wallet_1 = require("@/app/actions/wallet");
+var prisma_1 = require("@/lib/prisma");
+var hd_allocate_1 = require("@/app/actions/wallet/hd-allocate");
+function mapFamilyToUniversal(f) {
+    switch (f) {
+        case "EVM": return "evm";
+        case "TRON": return "tron";
+        case "SOLANA": return "solana";
+        case "EOS": return "eos";
+        case "DOGE": return "doge";
+        case "SUI": return "sui";
+        case "LTC": return "ltc";
+        case "TON": return "ton";
+        default: throw new Error("ChainFamily ".concat(f, " belum didukung generator universal"));
+    }
+}
+/**
+ * Service sesuai konstruktor di ApplicationManager:
+ *   const walletService = new WalletService(walletRepo)
+ */
 var WalletService = /** @class */ (function () {
     function WalletService(repo) {
         this.repo = repo;
     }
-    WalletService.prototype.getOrGenerateAddress = function (chain) {
+    /**
+     * Ambil 1 address untuk networkId:
+     * - coba stok pool yang belum terpakai
+     * - kalau kosong → derive baru via Server Action (aman), lalu simpan ke pool
+     */
+    WalletService.prototype.allocateForNetwork = function (networkId) {
         return __awaiter(this, void 0, void 0, function () {
-            var idle;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.repo.getIdleAddress(chain)];
+            var net, chain, stock, attempt, _a, index, address, created, e_1;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0: return [4 /*yield*/, prisma_1.prisma.network.findUnique({ where: { id: networkId } })];
                     case 1:
-                        idle = _a.sent();
-                        if (idle)
-                            return [2 /*return*/, idle];
-                        return [2 /*return*/, (0, wallet_1.generateNewAddress)(chain)];
+                        net = _b.sent();
+                        if (!net)
+                            throw new Error("Network tidak ditemukan");
+                        chain = mapFamilyToUniversal(net.family);
+                        return [4 /*yield*/, this.repo.findOneUnused(chain)];
+                    case 2:
+                        stock = _b.sent();
+                        if (stock)
+                            return [2 /*return*/, stock];
+                        attempt = 0;
+                        _b.label = 3;
+                    case 3:
+                        if (!(attempt < 3)) return [3 /*break*/, 9];
+                        return [4 /*yield*/, (0, hd_allocate_1.hdAllocateNew)(chain)];
+                    case 4:
+                        _a = _b.sent(), index = _a.index, address = _a.address;
+                        _b.label = 5;
+                    case 5:
+                        _b.trys.push([5, 7, , 8]);
+                        return [4 /*yield*/, this.repo.create({ chain: chain, derivationIndex: index, address: address })];
+                    case 6:
+                        created = _b.sent();
+                        return [2 /*return*/, created];
+                    case 7:
+                        e_1 = _b.sent();
+                        if (attempt === 2)
+                            throw e_1;
+                        return [3 /*break*/, 8];
+                    case 8:
+                        attempt++;
+                        return [3 /*break*/, 3];
+                    case 9: throw new Error("Gagal menyiapkan address baru");
                 }
             });
         });
     };
-    WalletService.prototype.assignAddressToOrder = function (addressId, orderId) {
+    WalletService.prototype.assignToOrder = function (poolId, orderId, networkId) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, this.repo.assignAddressToOrder(addressId, orderId)];
+                return [2 /*return*/, this.repo.assignToOrder(poolId, orderId, networkId)];
             });
         });
     };
-    WalletService.prototype.releaseAddress = function (addressId) {
+    WalletService.prototype.releaseForOrder = function (orderId) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, this.repo.releaseAddress(addressId)];
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, this.repo.releaseByOrderId(orderId)];
+                    case 1:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    WalletService.prototype.getPoolByOrder = function (orderId) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, this.repo.getByOrderId(orderId)];
             });
         });
     };

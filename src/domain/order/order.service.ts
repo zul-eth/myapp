@@ -1,174 +1,313 @@
+import { prisma } from "@/lib/prisma";
 import { OrderRepositoryPrisma } from "./order.repository";
-import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
-import { WalletService } from "../wallet/wallet.service";
-import { ChainFamily, OrderStatus, Prisma } from "@prisma/client";
+import { WalletService } from "@/domain/wallet/wallet.service";
+import { ExchangeRateService } from "@/domain/exchange-rate/exchange-rate.service";
+import { AssetType, MemoKind, OrderStatus } from "@prisma/client";
+import { OrderCreateFlexibleSchema, OrderCreateStrictSchema } from "@/lib/validation/order";
+import { z } from "zod";
 
-type CreateOrderInput =
-  | ({
-      pairId: string;
-      amount: number;
-      receivingAddr: string;
-      receivingMemo?: string | null;
-    } & Partial<{
-      expiresAt: Date;
-    }>)
-  | ({
-      buyCoinId: string;
-      buyNetworkId: string;
-      payWithId: string;
-      payNetworkId: string;
-      amount: number;
-      receivingAddr: string;
-      receivingMemo?: string | null;
-    } & Partial<{
-      expiresAt: Date;
-    }>);
+// util sederhana
+const DEFAULT_EXPIRE_MINUTES = 15;
+const isUuid = (s?: string | null) => !!s && z.string().uuid().safeParse(s).success;
+const up = (s?: string | null) => (typeof s === "string" ? s.trim().toUpperCase() : undefined);
+const minutesFromNow = (m: number) => new Date(Date.now() + m * 60_000);
+const rand = (len: number, abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789") =>
+  Array.from({ length: len }, () => abc[Math.floor(Math.random() * abc.length)]).join("");
+const randomTag6 = () => String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
+const randomText8 = () => rand(8);
 
+type FlexibleOrderInput = z.infer<typeof OrderCreateFlexibleSchema>;
+type StrictOrderInput   = z.infer<typeof OrderCreateStrictSchema>;
+
+/**
+ * Konstruktor DI disesuaikan dgn ApplicationManager:
+ *   new OrderService(orderRepo, rateService, walletService)
+ * (rateService tidak wajib dipakai di sini, tapi kita terima agar kompatibel)
+ */
 export class OrderService {
   constructor(
-    private readonly repo: OrderRepositoryPrisma,
-    private readonly rateService: ExchangeRateService,
-    private readonly walletService: WalletService
+    private readonly orders: OrderRepositoryPrisma,
+    private readonly _rates: ExchangeRateService,     // keep untuk kompatibilitas
+    private readonly wallets: WalletService
   ) {}
 
-  /**
-   * Buat order dengan rate yang diambil langsung dari ExchangeRate.
-   * - Menimpa priceRate yang dikirim klien
-   * - Alokasikan payment address sesuai family jaringan bayar
-   * - Status awal: WAITING_PAYMENT
-   */
-  async create(input: CreateOrderInput) {
-    // 1) Resolve pair
-    let pair:
-      | Awaited<ReturnType<ExchangeRateService["getById"]>>
-      | Awaited<ReturnType<ExchangeRateService["getLatest"]>>
-      | null = null;
+  listAll() { return this.orders.listAll(); }
+  getById(id: string) { return this.orders.getById(id); }
 
-    if ("pairId" in input) {
-      pair = await this.rateService.getById(input.pairId);
+  // ---------- CREATE (FLEXIBLE) ----------
+  async createFlexible(input: FlexibleOrderInput) {
+    const strict = await this.toStrict(input);
+    if (!strict.expiresInMinutes) strict.expiresInMinutes = DEFAULT_EXPIRE_MINUTES;
+    return this.create(strict);
+  }
+
+  // ---------- CREATE (STRICT) ----------
+  async create(input: StrictOrderInput) {
+    // PaymentOption aktif
+    const payOption = await prisma.paymentOption.findFirst({
+      where: { coinId: input.payWithId, networkId: input.payNetworkId, isActive: true },
+      include: { coin: true, network: true },
+    });
+    if (!payOption) throw new Error("Payment option tidak tersedia/aktif");
+
+    // CoinNetwork aktif
+    const buyCN = await prisma.coinNetwork.findFirst({ where: { coinId: input.coinToBuyId, networkId: input.buyNetworkId, isActive: true }});
+    if (!buyCN) throw new Error("CoinNetwork (buy) tidak aktif/valid");
+    const payCN = await prisma.coinNetwork.findFirst({ where: { coinId: input.payWithId, networkId: input.payNetworkId, isActive: true }});
+    if (!payCN) throw new Error("CoinNetwork (pay) tidak aktif/valid");
+
+    // Rate
+    const rateRow = await prisma.exchangeRate.findUnique({
+      where: {
+        buyCoinId_buyNetworkId_payCoinId_payNetworkId: {
+          buyCoinId: input.coinToBuyId,
+          buyNetworkId: input.buyNetworkId,
+          payCoinId: input.payWithId,
+          payNetworkId: input.payNetworkId,
+        },
+      },
+    });
+    if (!rateRow) throw new Error("Exchange rate tidak ditemukan untuk pasangan ini");
+    const priceRate = rateRow.rate;
+
+    // Required confirmations
+    const payNetwork = await prisma.network.findUnique({ where: { id: input.payNetworkId } });
+    if (!payNetwork) throw new Error("Network pembayaran tidak ditemukan");
+
+    // Memo
+    let paymentMemo: string | null = null;
+    switch (payCN.memoKind) {
+      case MemoKind.XRP_TAG: paymentMemo = randomTag6(); break;
+      case MemoKind.EOS_TEXT:
+      case MemoKind.TON_TEXT:
+      case MemoKind.OTHER: paymentMemo = randomText8(); break;
+      default: paymentMemo = null;
+    }
+
+    // Address dari pool / derive baru
+    const pool = await this.wallets.allocateForNetwork(input.payNetworkId);
+    const expiresAt = minutesFromNow(input.expiresInMinutes ?? DEFAULT_EXPIRE_MINUTES);
+
+    // Transaksi atomik
+    const created = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          coinToBuyId: input.coinToBuyId,
+          buyNetworkId: input.buyNetworkId,
+          payWithId: input.payWithId,
+          payNetworkId: input.payNetworkId,
+          amount: input.amount,
+          priceRate,
+          receivingAddr: input.receivingAddr,
+          receivingMemo: input.receivingMemo ?? null,
+          paymentAddr: pool.address,
+          paymentMemo,
+          expiresAt,
+          status: "WAITING_PAYMENT",
+        },
+      });
+
+      await tx.walletPoolLegacy.update({
+        where: { id: pool.id },
+        data: { isUsed: true, assignedOrderId: order.id, networkId: input.payNetworkId },
+      });
+
+      await tx.payment.create({
+        data: {
+          orderId: order.id,
+          coinId: input.payWithId,
+          networkId: input.payNetworkId,
+          payToAddress: pool.address,
+          payToMemo: paymentMemo,
+          requiredConfirmations: payNetwork.requiredConfirmations ?? 1,
+          assetType: payCN.assetType as AssetType,
+          decimals: payCN.decimals ?? 18,
+          assetContract: payCN.contractAddress ?? null,
+        },
+      });
+
+      return order;
+    });
+
+    return this.getById(created.id);
+  }
+
+  // ---------- STATUS / RELEASE ----------
+  private async releaseAddress(orderId: string) {
+    await this.wallets.releaseForOrder(orderId);
+  }
+
+  async cancel(id: string) {
+    const cur = await this.orders.getById(id);
+    if (!cur) throw new Error("Order tidak ditemukan");
+    if (["COMPLETED", "CANCELED", "FAILED", "EXPIRED"].includes(cur.status)) return cur;
+
+    await prisma.order.update({ where: { id }, data: { status: "CANCELED" } });
+    await this.releaseAddress(id);
+    return this.getById(id);
+  }
+
+  async updateStatus(id: string, status: OrderStatus) {
+    await prisma.order.update({ where: { id }, data: { status } });
+    if (["COMPLETED", "FAILED", "CANCELED", "EXPIRED"].includes(status)) {
+      await this.releaseAddress(id);
+    }
+    return this.getById(id);
+  }
+
+  // ---------- REGENERATE INVOICE ----------
+  async regenerateInvoice(orderId: string) {
+    const cur = await this.getById(orderId);
+    if (!cur) throw new Error("Order tidak ditemukan");
+    if (!["FAILED", "CANCELED", "EXPIRED"].includes(cur.status)) {
+      throw new Error("Order belum selesai/invalid untuk regenerate");
+    }
+
+    await this.releaseAddress(orderId);
+    const pool = await this.wallets.allocateForNetwork(cur.payNetworkId);
+
+    const payCN = await prisma.coinNetwork.findFirst({
+      where: { coinId: cur.payWithId, networkId: cur.payNetworkId, isActive: true },
+    });
+    if (!payCN) throw new Error("CoinNetwork (pay) tidak aktif/valid");
+
+    let paymentMemo: string | null = null;
+    switch (payCN.memoKind) {
+      case "XRP_TAG": paymentMemo = randomTag6(); break;
+      case "EOS_TEXT":
+      case "TON_TEXT":
+      case "OTHER": paymentMemo = randomText8(); break;
+      default: paymentMemo = null;
+    }
+
+    const expiresAt = minutesFromNow(DEFAULT_EXPIRE_MINUTES);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.walletPoolLegacy.update({
+        where: { id: pool.id },
+        data: { isUsed: true, assignedOrderId: cur.id, networkId: cur.payNetworkId },
+      });
+
+      await tx.order.update({
+        where: { id: cur.id },
+        data: {
+          paymentAddr: pool.address,
+          paymentMemo,
+          status: "WAITING_PAYMENT",
+          expiresAt,
+        },
+      });
+
+      await tx.payment.update({
+        where: { orderId: cur.id },
+        data: {
+          payToAddress: pool.address,
+          payToMemo: paymentMemo,
+          status: "NOT_STARTED",
+          txHash: null,
+          fromAddress: null,
+          toAddress: null,
+          amountRaw: null,
+          confirmations: 0,
+          detectedAt: null,
+          confirmedAt: null,
+          lastWebhookEventId: null,
+          verificationSource: null,
+          notes: null,
+        },
+      });
+    });
+
+    return this.getById(orderId);
+  }
+
+  // ---------- EXPIRE JOB (15 menit) ----------
+  async expireOverdue() {
+    const now = new Date();
+    const stale = await prisma.order.findMany({
+      where: {
+        status: { in: ["PENDING", "WAITING_PAYMENT"] },
+        OR: [
+          { expiresAt: { lt: now } },
+          { AND: [ { expiresAt: null }, { createdAt: { lt: new Date(now.getTime() - DEFAULT_EXPIRE_MINUTES * 60 * 1000) } } ] },
+        ],
+      },
+      select: { id: true },
+    });
+
+    for (const o of stale) {
+      await this.updateStatus(o.id, "EXPIRED");
+    }
+    return { expired: stale.length };
+  }
+
+  // ---------- FLEX → STRICT ----------
+  private async toStrict(input: FlexibleOrderInput): Promise<StrictOrderInput> {
+    const coinToBuyId = await this.resolveCoinId({ id: input.coinToBuyId as any, symbol: input.coinToBuySymbol });
+    const buyNetworkId = await this.resolveNetworkId({ id: input.buyNetworkId as any, symbol: input.buyNetworkSymbol, name: input.buyNetworkName });
+
+    let payWithId: string;
+    let payNetworkId: string;
+    if (input.paymentOptionId) {
+      ({ payWithId, payNetworkId } = await this.resolvePayByPaymentOptionId(input.paymentOptionId));
+    } else if (input.payPair) {
+      ({ payWithId, payNetworkId } = await this.resolvePayByPair(input.payPair));
     } else {
-      pair = await this.rateService.getLatest({
-        buyCoinId: input.buyCoinId,
-        buyNetworkId: input.buyNetworkId,
-        payCoinId: input.payWithId,
-        payNetworkId: input.payNetworkId,
-      });
+      payWithId = await this.resolveCoinId({ id: input.payWithId as any, symbol: input.payWithSymbol });
+      payNetworkId = await this.resolveNetworkId({ id: input.payNetworkId as any, symbol: input.payNetworkSymbol, name: input.payNetworkName });
     }
-    if (!pair) throw new Error("Exchange rate/pair tidak ditemukan");
 
-    // 2) Validasi jumlah & rate
-    const amount = Number(("amount" in input && input.amount) || 0);
-    if (!amount || amount <= 0) throw new Error("amount harus > 0");
-
-    const priceRate = Number(pair.rate);
-    if (!priceRate || priceRate <= 0) throw new Error("Rate tidak valid");
-
-    // 3) Alokasi alamat pembayaran
-    const chainFamily: ChainFamily = pair.payNetwork.family;
-    const wallet = await this.walletService.getOrGenerateAddress(chainFamily);
-    
-    const defaultExpires = new Date(Date.now() + 15 * 60 * 1000);
-    const expiresAt = "expiresAt" in input && input.expiresAt ? input.expiresAt : defaultExpires;
-
-    // 4) Simpan order
-    const data: Prisma.OrderUncheckedCreateInput = {
-      coinToBuyId: pair.buyCoinId,
-      buyNetworkId: pair.buyNetworkId,
-      payWithId: pair.payCoinId,
-      payNetworkId: pair.payNetworkId,
-      amount,
-      priceRate,
-      status: OrderStatus.WAITING_PAYMENT,
+    return OrderCreateStrictSchema.parse({
+      coinToBuyId, buyNetworkId, payWithId, payNetworkId,
+      amount: input.amount,
       receivingAddr: input.receivingAddr,
-      receivingMemo: input.receivingMemo ?? null,
-      paymentAddr: wallet.address,
-      paymentMemo: null,
-      expiresAt, // ← gunakan default 15 menit jika tidak disuplai
-    };
-
-    const order = await this.repo.createOrder(data);
-
-    // Tandai wallet dipakai oleh order ini
-    if (wallet.id) {
-      await this.walletService.assignAddressToOrder(wallet.id, order.id);
-    }
-
-    return this.repo.findById(order.id);
+      receivingMemo: input.receivingMemo,
+      expiresInMinutes: input.expiresInMinutes ?? DEFAULT_EXPIRE_MINUTES,
+    });
   }
 
-  /**
-   * Update order. Jika pasangan/rate berubah → ambil rate terbaru.
-   * Rilis alamat saat status terminal.
-   */
-  async update(
-    id: string,
-    patch: Partial<Prisma.OrderUncheckedUpdateInput> & { pairId?: string }
-  ) {
-    const order = await this.repo.findById(id);
-    if (!order) throw new Error("Order tidak ditemukan");
-
-    // pairId baru → set pasangan & priceRate sesuai pair tsb
-    if (patch.pairId && typeof patch.pairId === "string") {
-      const pair = await this.rateService.getById(patch.pairId);
-      if (!pair) throw new Error("Exchange rate/pair tidak ditemukan");
-      patch.coinToBuyId = pair.buyCoinId;
-      patch.buyNetworkId = pair.buyNetworkId;
-      patch.payWithId = pair.payCoinId;
-      patch.payNetworkId = pair.payNetworkId;
-      patch.priceRate = pair.rate;
+  private async resolveCoinId({ id, symbol }: { id?: string; symbol?: string | null }) {
+    if (id && isUuid(id)) return id;
+    const sym = (symbol ?? id)?.toString();
+    if (sym) {
+      const coin = await prisma.coin.findUnique({ where: { symbol: up(sym)! } });
+      if (!coin) throw new Error(`Coin dengan symbol '${sym}' tidak ditemukan`);
+      return coin.id;
     }
-
-    // Jika komponen pasangan berubah → re-price pakai latest
-    const fields = ["coinToBuyId", "buyNetworkId", "payWithId", "payNetworkId"] as const;
-    if (fields.some((k) => k in patch)) {
-      const pair = await this.rateService.getLatest({
-        buyCoinId: String(patch.coinToBuyId ?? order.coinToBuyId),
-        buyNetworkId: String(patch.buyNetworkId ?? order.buyNetworkId),
-        payCoinId: String(patch.payWithId ?? order.payWithId),
-        payNetworkId: String(patch.payNetworkId ?? order.payNetworkId),
-      });
-      if (!pair) throw new Error("Exchange rate/pair tidak ditemukan");
-      patch.priceRate = pair.rate;
-    }
-
-    const updated = await this.repo.updateOrder(id, patch);
-
-    // Rilis alamat bila status terminal
-    if (
-      "status" in patch &&
-      [OrderStatus.COMPLETED, OrderStatus.EXPIRED, OrderStatus.FAILED].includes(
-        patch.status as OrderStatus
-      )
-    ) {
-      if (order.walletPoolLegacy?.id) {
-        await this.walletService.releaseAddress(order.walletPoolLegacy.id);
-      }
-    }
-
-    return this.repo.findById(updated.id);
+    throw new Error("coin tidak valid");
   }
 
-  async setStatus(id: string, status: OrderStatus) {
-    const order = await this.repo.findById(id);
-    if (!order) throw new Error("Order tidak ditemukan");
-
-    const updated = await this.repo.updateOrder(id, { status });
-
-    if ([OrderStatus.COMPLETED, OrderStatus.EXPIRED, OrderStatus.FAILED].includes(status)) {
-      if (order.walletPoolLegacy?.id) {
-        await this.walletService.releaseAddress(order.walletPoolLegacy.id);
-      }
+  private async resolveNetworkId({ id, symbol, name }: { id?: string; symbol?: string | null; name?: string | null }) {
+    if (id && isUuid(id)) return id;
+    if (name) {
+      const byName = await prisma.network.findUnique({ where: { name } });
+      if (byName) return byName.id;
     }
-    return updated;
+    const sym = (symbol ?? id)?.toString();
+    if (sym) {
+      const n = await prisma.network.findFirst({ where: { symbol: up(sym)!, isActive: true } });
+      if (n) return n.id;
+    }
+    throw new Error("network tidak valid");
   }
 
-  async get(id: string) {
-    const o = await this.repo.findById(id);
-    if (!o) throw new Error("Order tidak ditemukan");
-    return o;
+  private async resolvePayByPaymentOptionId(paymentOptionId: string) {
+    const po = await prisma.paymentOption.findUnique({
+      where: { id: paymentOptionId }, include: { coin: true, network: true }
+    });
+    if (!po || !po.isActive) throw new Error("paymentOption tidak ditemukan/aktif");
+    return { payWithId: po.coinId, payNetworkId: po.networkId };
   }
 
-  async list(params?: { status?: OrderStatus; search?: string; skip?: number; take?: number }) {
-    return this.repo.listAll(params);
+  private async resolvePayByPair(payPair: string) {
+    const [coinSym, netSymRaw] = payPair.split(":");
+    const coin = await prisma.coin.findUnique({ where: { symbol: up(coinSym)! } });
+    if (!coin) throw new Error(`Coin '${coinSym}' tidak ditemukan`);
+    const byName = await prisma.network.findUnique({ where: { name: netSymRaw } });
+    const net = byName ?? (await prisma.network.findFirst({ where: { symbol: up(netSymRaw)!, isActive: true } }));
+    if (!net) throw new Error(`Network '${netSymRaw}' tidak ditemukan`);
+    const po = await prisma.paymentOption.findFirst({ where: { coinId: coin.id, networkId: net.id, isActive: true } });
+    if (!po) throw new Error(`Payment option ${coin.symbol}:${net.symbol ?? net.name} tidak tersedia`);
+    return { payWithId: coin.id, payNetworkId: net.id };
   }
 }

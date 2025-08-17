@@ -1,38 +1,35 @@
 import { prisma } from "@/lib/prisma";
-import { OrderStatus, Prisma } from "@prisma/client";
+import { OrderStatus } from "@prisma/client";
+
+export type CreateOrderDTO = {
+  coinToBuyId: string;
+  buyNetworkId: string;
+  payWithId: string;
+  payNetworkId: string;
+  amount: number;
+  priceRate: number;
+  receivingAddr: string;
+  receivingMemo?: string | null;
+  paymentAddr: string;
+  paymentMemo?: string | null;
+  expiresAt?: Date | null;
+};
 
 export class OrderRepositoryPrisma {
-  async listAll(params?: {
-    status?: OrderStatus;
-    search?: string;
-    skip?: number;
-    take?: number;
-  }) {
-    const where: Prisma.OrderWhereInput = {};
-    if (params?.status) where.status = params.status;
-    if (params?.search) {
-      where.OR = [
-        { receivingAddr: { contains: params.search, mode: "insensitive" } },
-        { paymentAddr: { contains: params.search, mode: "insensitive" } },
-        { txHash: { contains: params.search, mode: "insensitive" } },
-      ];
-    }
+  listAll() {
     return prisma.order.findMany({
-      where,
-      skip: params?.skip,
-      take: params?.take ?? 50,
       orderBy: { createdAt: "desc" },
       include: {
         coinToBuy: true,
         buyNetwork: true,
         payWith: true,
         payNetwork: true,
-        walletPoolLegacy: true,
+        payment: true,
       },
     });
   }
 
-  async findById(id: string) {
+  getById(id: string) {
     return prisma.order.findUnique({
       where: { id },
       include: {
@@ -40,16 +37,43 @@ export class OrderRepositoryPrisma {
         buyNetwork: true,
         payWith: true,
         payNetwork: true,
-        walletPoolLegacy: true,
+        payment: true,
       },
     });
   }
 
-  async createOrder(data: Prisma.OrderUncheckedCreateInput) {
-    return prisma.order.create({ data });
+  create(data: CreateOrderDTO) {
+    return prisma.order.create({
+      data: {
+        coinToBuyId: data.coinToBuyId,
+        buyNetworkId: data.buyNetworkId,
+        payWithId: data.payWithId,
+        payNetworkId: data.payNetworkId,
+        amount: data.amount,
+        priceRate: data.priceRate,
+        receivingAddr: data.receivingAddr,
+        receivingMemo: data.receivingMemo ?? null,
+        paymentAddr: data.paymentAddr,
+        paymentMemo: data.paymentMemo ?? null,
+        expiresAt: data.expiresAt ?? null,
+        status: "WAITING_PAYMENT",
+      },
+    });
   }
 
-  async updateOrder(id: string, data: Prisma.OrderUncheckedUpdateInput) {
-    return prisma.order.update({ where: { id }, data });
+  updateStatus(id: string, status: OrderStatus) {
+    return prisma.order.update({ where: { id }, data: { status } });
+  }
+
+  cancel(id: string) {
+    return prisma.order.update({ where: { id }, data: { status: "CANCELED" } });
+  }
+
+  markExpired(id: string) {
+    return prisma.order.update({ where: { id }, data: { status: "EXPIRED" } });
+  }
+
+  setPayout(id: string, payoutHash: string) {
+    return prisma.order.update({ where: { id }, data: { payoutHash, payoutAt: new Date() } });
   }
 }

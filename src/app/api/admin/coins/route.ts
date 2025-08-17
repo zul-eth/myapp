@@ -1,27 +1,31 @@
-import { NextResponse } from "next/server";
 import { getApplicationManager } from "@/core";
+import { CoinCreateSchema } from "@/lib/validation/coin";
+import { badRequest, conflict, json } from "@/lib/http/responses";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const app = getApplicationManager();
   const coins = await app.coin.service.listAll();
-  return NextResponse.json(coins);
+  return json(coins);
 }
 
 export async function POST(req: Request) {
   const app = getApplicationManager();
-  const { symbol, name, logoUrl } = await req.json();
+  const body = await req.json().catch(() => ({}));
 
-  if (!symbol || !name) {
-    return NextResponse.json({ error: "Symbol dan Name wajib diisi" }, { status: 400 });
+  const parsed = CoinCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues?.[0]?.message ?? "Input tidak valid";
+    return badRequest(msg);
   }
 
   try {
-    const created = await app.coin.service.create({ symbol, name, logoUrl });
-    return NextResponse.json(created, { status: 201 });
+    const created = await app.coin.service.create(parsed.data);
+    return json(created, 201);
   } catch (e: any) {
-    if (e.message.includes("sudah ada")) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
-    }
-    return NextResponse.json({ error: e.message }, { status: 400 });
+    const msg = e?.message ?? "Gagal membuat coin";
+    if (/sudah ada/i.test(msg)) return conflict(msg);
+    return badRequest(msg);
   }
 }

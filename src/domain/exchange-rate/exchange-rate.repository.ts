@@ -1,9 +1,25 @@
 import { prisma } from "@/lib/prisma";
+import { BaseRepository } from "@/domain/common/base.repository";
 
-export class ExchangeRateRepositoryPrisma {
-  async listAll() {
+export type CreateExchangeRateDTO = {
+  buyCoinId: string;
+  buyNetworkId: string;
+  payCoinId: string;
+  payNetworkId: string;
+  rate: number;
+  updatedBy?: string | null;
+};
+
+export type UpdateExchangeRateDTO = Partial<Pick<CreateExchangeRateDTO, "rate" | "updatedBy">>;
+
+export class ExchangeRateRepositoryPrisma extends BaseRepository<typeof prisma.exchangeRate> {
+  constructor() {
+    super(prisma.exchangeRate);
+  }
+
+  listAll() {
     return prisma.exchangeRate.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ updatedAt: "desc" }],
       include: {
         buyCoin: true,
         buyNetwork: true,
@@ -13,46 +29,15 @@ export class ExchangeRateRepositoryPrisma {
     });
   }
 
-  async findById(id: string) {
-    return prisma.exchangeRate.findUnique({
-      where: { id },
-      include: {
-        buyCoin: true,
-        buyNetwork: true,
-        payCoin: true,
-        payNetwork: true,
-      },
-    });
-  }
-
-  async findLatestByComposite(params: {
-    buyCoinId: string;
-    buyNetworkId: string;
-    payCoinId: string;
-    payNetworkId: string;
-  }) {
-    const { buyCoinId, buyNetworkId, payCoinId, payNetworkId } = params;
-    return prisma.exchangeRate.findFirst({
-      where: { buyCoinId, buyNetworkId, payCoinId, payNetworkId },
-      orderBy: { createdAt: "desc" },
-      include: {
-        buyCoin: true,
-        buyNetwork: true,
-        payCoin: true,
-        payNetwork: true,
-      },
-    });
-  }
-
-  async createExchangeRate(data: any) {
+  create(data: CreateExchangeRateDTO) {
     return prisma.exchangeRate.create({ data });
   }
 
-  async updateExchangeRate(id: string, data: any) {
+  update(id: string, data: UpdateExchangeRateDTO) {
     return prisma.exchangeRate.update({ where: { id }, data });
   }
 
-  async deleteExchangeRate(id: string) {
+  delete(id: string) {
     return prisma.exchangeRate.delete({ where: { id } });
   }
 }

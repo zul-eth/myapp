@@ -36,50 +36,56 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.POST = exports.GET = void 0;
-var server_1 = require("next/server");
+exports.POST = exports.GET = exports.dynamic = void 0;
 var core_1 = require("@/core");
+var payment_option_1 = require("@/lib/validation/payment-option");
+var responses_1 = require("@/lib/http/responses");
+exports.dynamic = "force-dynamic";
 function GET() {
     return __awaiter(this, void 0, void 0, function () {
-        var app, _a, _b;
-        return __generator(this, function (_c) {
-            switch (_c.label) {
+        var app, rows;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
                 case 0:
                     app = (0, core_1.getApplicationManager)();
-                    _b = (_a = server_1.NextResponse).json;
                     return [4 /*yield*/, app.paymentOption.service.listAll()];
-                case 1: return [2 /*return*/, _b.apply(_a, [_c.sent()])];
+                case 1:
+                    rows = _a.sent();
+                    return [2 /*return*/, (0, responses_1.json)(rows)];
             }
         });
     });
 }
 exports.GET = GET;
 function POST(req) {
+    var _a, _b, _c, _d;
     return __awaiter(this, void 0, void 0, function () {
-        var app, _a, coinId, networkId, created, e_1;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var app, body, parsed, msg, created, e_1, msg;
+        return __generator(this, function (_e) {
+            switch (_e.label) {
                 case 0:
                     app = (0, core_1.getApplicationManager)();
-                    return [4 /*yield*/, req.json()];
+                    return [4 /*yield*/, req.json().catch(function () { return ({}); })];
                 case 1:
-                    _a = _b.sent(), coinId = _a.coinId, networkId = _a.networkId;
-                    if (!coinId || !networkId) {
-                        return [2 /*return*/, server_1.NextResponse.json({ error: "Coin dan Network wajib diisi" }, { status: 400 })];
+                    body = _e.sent();
+                    parsed = payment_option_1.PaymentOptionCreateSchema.safeParse(body);
+                    if (!parsed.success) {
+                        msg = (_c = (_b = (_a = parsed.error.issues) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.message) !== null && _c !== void 0 ? _c : "Input tidak valid";
+                        return [2 /*return*/, (0, responses_1.badRequest)(msg)];
                     }
-                    _b.label = 2;
+                    _e.label = 2;
                 case 2:
-                    _b.trys.push([2, 4, , 5]);
-                    return [4 /*yield*/, app.paymentOption.service.create({ coinId: coinId, networkId: networkId })];
+                    _e.trys.push([2, 4, , 5]);
+                    return [4 /*yield*/, app.paymentOption.service.create(parsed.data)];
                 case 3:
-                    created = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(created, { status: 201 })];
+                    created = _e.sent();
+                    return [2 /*return*/, (0, responses_1.json)(created, 201)];
                 case 4:
-                    e_1 = _b.sent();
-                    if (e_1.message.includes("sudah ada")) {
-                        return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 409 })];
-                    }
-                    return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 400 })];
+                    e_1 = _e.sent();
+                    msg = (_d = e_1 === null || e_1 === void 0 ? void 0 : e_1.message) !== null && _d !== void 0 ? _d : "Gagal membuat payment option";
+                    if (/sudah ada/i.test(msg) || (e_1 === null || e_1 === void 0 ? void 0 : e_1.code) === "P2002")
+                        return [2 /*return*/, (0, responses_1.conflict)(msg)];
+                    return [2 /*return*/, (0, responses_1.badRequest)(msg)];
                 case 5: return [2 /*return*/];
             }
         });

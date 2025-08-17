@@ -1,34 +1,80 @@
 import { prisma } from "@/lib/prisma";
 import { BaseRepository } from "@/domain/common/base.repository";
 
+export type CreatePaymentOptionDTO = {
+  coinId: string;
+  networkId: string;
+  isActive?: boolean;
+};
+
+export type UpdatePaymentOptionDTO = Partial<Pick<CreatePaymentOptionDTO, "isActive">>;
+
+export type PaymentOptionActiveFilter = {
+  coinId?: string;
+  networkId?: string;
+  coinSymbol?: string;    // akan di-uppercasing di service
+  networkSymbol?: string; // akan di-uppercasing di service
+};
+
 export class PaymentOptionRepositoryPrisma extends BaseRepository<typeof prisma.paymentOption> {
   constructor() {
     super(prisma.paymentOption);
   }
 
-  async listAll() {
+  listAll() {
     return prisma.paymentOption.findMany({
+      orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
       include: { coin: true, network: true },
-      orderBy: { createdAt: "desc" }
     });
   }
 
-  async createPaymentOption(data: { coinId: string; networkId: string }) {
-    if (!data.coinId || !data.networkId) throw new Error("Coin dan Network wajib diisi");
+  async findActive(filter?: PaymentOptionActiveFilter) {
+    const where: any = { isActive: true };
 
-    const exists = await prisma.paymentOption.findFirst({
-      where: { coinId: data.coinId, networkId: data.networkId }
+    if (filter?.coinId) where.coinId = filter.coinId;
+    if (filter?.networkId) where.networkId = filter.networkId;
+    if (filter?.coinSymbol) where.coin = { symbol: filter.coinSymbol };
+    if (filter?.networkSymbol) where.network = { symbol: filter.networkSymbol };
+
+    return prisma.paymentOption.findMany({
+      where,
+      include: { coin: true, network: true },
+      orderBy: [{ coin: { symbol: "asc" } }, { network: { symbol: "asc" } }],
     });
-    if (exists) throw new Error("Payment option ini sudah ada");
-
-    return prisma.paymentOption.create({ data });
   }
 
-  async updatePaymentOption(id: string, data: { isActive?: boolean }) {
-    return prisma.paymentOption.update({ where: { id }, data });
+  getById(id: string) {
+    return prisma.paymentOption.findUnique({
+      where: { id },
+      include: { coin: true, network: true },
+    });
   }
 
-  async deletePaymentOption(id: string) {
+  create(data: CreatePaymentOptionDTO) {
+    return prisma.paymentOption.create({
+      data: {
+        coinId: data.coinId,
+        networkId: data.networkId,
+        isActive: data.isActive ?? true,
+      },
+    });
+  }
+
+  update(id: string, data: UpdatePaymentOptionDTO) {
+    return prisma.paymentOption.update({
+      where: { id },
+      data,
+    });
+  }
+
+  toggleActive(id: string, isActive: boolean) {
+    return prisma.paymentOption.update({
+      where: { id },
+      data: { isActive },
+    });
+  }
+
+  delete(id: string) {
     return prisma.paymentOption.delete({ where: { id } });
   }
 }

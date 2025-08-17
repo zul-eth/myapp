@@ -36,61 +36,70 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DELETE = exports.PATCH = void 0;
-var server_1 = require("next/server");
+exports.DELETE = exports.PUT = void 0;
 var core_1 = require("@/core");
-function PATCH(req, _a) {
+var payment_option_1 = require("@/lib/validation/payment-option");
+var responses_1 = require("@/lib/http/responses");
+function PUT(req, _a) {
+    var _b, _c, _d, _e;
     var params = _a.params;
     return __awaiter(this, void 0, void 0, function () {
-        var id, isActive, app, updated, e_1;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var id, app, body, parsed, msg, updated, e_1;
+        return __generator(this, function (_f) {
+            switch (_f.label) {
                 case 0: return [4 /*yield*/, params];
                 case 1:
-                    id = (_b.sent()).id;
-                    return [4 /*yield*/, req.json()];
-                case 2:
-                    isActive = (_b.sent()).isActive;
-                    if (typeof isActive !== "boolean") {
-                        return [2 /*return*/, server_1.NextResponse.json({ error: "isActive harus boolean" }, { status: 400 })];
-                    }
+                    id = (_f.sent()).id;
                     app = (0, core_1.getApplicationManager)();
-                    _b.label = 3;
+                    return [4 /*yield*/, req.json().catch(function () { return ({}); })];
+                case 2:
+                    body = _f.sent();
+                    parsed = payment_option_1.PaymentOptionUpdateSchema.safeParse(body);
+                    if (!parsed.success) {
+                        msg = (_d = (_c = (_b = parsed.error.issues) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.message) !== null && _d !== void 0 ? _d : "Input tidak valid";
+                        return [2 /*return*/, (0, responses_1.badRequest)(msg)];
+                    }
+                    _f.label = 3;
                 case 3:
-                    _b.trys.push([3, 5, , 6]);
-                    return [4 /*yield*/, app.paymentOption.service.update(id, { isActive: isActive })];
+                    _f.trys.push([3, 5, , 6]);
+                    return [4 /*yield*/, app.paymentOption.service.update(id, parsed.data)];
                 case 4:
-                    updated = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(updated)];
+                    updated = _f.sent();
+                    return [2 /*return*/, (0, responses_1.json)(updated, 200)];
                 case 5:
-                    e_1 = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ error: e_1.message }, { status: 400 })];
+                    e_1 = _f.sent();
+                    if ((e_1 === null || e_1 === void 0 ? void 0 : e_1.code) === "P2025")
+                        return [2 /*return*/, (0, responses_1.notFound)("PaymentOption tidak ditemukan")];
+                    return [2 /*return*/, (0, responses_1.badRequest)((_e = e_1 === null || e_1 === void 0 ? void 0 : e_1.message) !== null && _e !== void 0 ? _e : "Gagal mengubah payment option")];
                 case 6: return [2 /*return*/];
             }
         });
     });
 }
-exports.PATCH = PATCH;
-function DELETE(_, _a) {
+exports.PUT = PUT;
+function DELETE(_req, _a) {
+    var _b;
     var params = _a.params;
     return __awaiter(this, void 0, void 0, function () {
-        var id, app, deleted, e_2;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var id, app, res, e_2;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
                 case 0: return [4 /*yield*/, params];
                 case 1:
-                    id = (_b.sent()).id;
+                    id = (_c.sent()).id;
                     app = (0, core_1.getApplicationManager)();
-                    _b.label = 2;
+                    _c.label = 2;
                 case 2:
-                    _b.trys.push([2, 4, , 5]);
+                    _c.trys.push([2, 4, , 5]);
                     return [4 /*yield*/, app.paymentOption.service.delete(id)];
                 case 3:
-                    deleted = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json(deleted)];
+                    res = _c.sent();
+                    return [2 /*return*/, (0, responses_1.json)(res, 200)];
                 case 4:
-                    e_2 = _b.sent();
-                    return [2 /*return*/, server_1.NextResponse.json({ error: e_2.message }, { status: 400 })];
+                    e_2 = _c.sent();
+                    if ((e_2 === null || e_2 === void 0 ? void 0 : e_2.code) === "P2025")
+                        return [2 /*return*/, (0, responses_1.notFound)("PaymentOption tidak ditemukan")];
+                    return [2 /*return*/, (0, responses_1.badRequest)((_b = e_2 === null || e_2 === void 0 ? void 0 : e_2.message) !== null && _b !== void 0 ? _b : "Gagal menghapus payment option")];
                 case 5: return [2 /*return*/];
             }
         });
