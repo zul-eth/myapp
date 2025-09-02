@@ -74,7 +74,7 @@ export default function AdminOrdersPage() {
               <tr key={r.id}>
                 <td className="p-2 border font-mono">{r.id}</td>
                 <td className="p-2 border">
-                  {r.buyNetwork?.symbol ?? r.buyNetwork?.name}/{r.coinToBuy?.symbol} ← {r.payNetwork?.symbol ?? r.payNetwork?.name}/{r.payWith?.symbol}
+                  {r.buyNetwork?.name ?? r.buyNetwork?.name}/{r.coinToBuy?.symbol} ← {r.payNetwork?.name ?? r.payNetwork?.name}/{r.payWith?.symbol}
                 </td>
                 <td className="p-2 border">{r.amount} · rate {r.priceRate}</td>
                 <td className="p-2 border">

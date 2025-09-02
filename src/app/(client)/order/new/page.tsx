@@ -14,10 +14,10 @@ type PaymentOptionRow = {
 type RateRow = {
   id: string;
   rate: number;
-  buyCoin: { id: string; symbol: string; name: string };
-  buyNetwork: { id: string; symbol: string | null; name: string };
-  payCoin: { id: string; symbol: string; name: string };
-  payNetwork: { id: string; symbol: string | null; name: string };
+  buyCoin: { symbol: string; name: string };
+  buyNetwork: { symbol: string | null; name: string };
+  payCoin: { symbol: string; name: string };
+  payNetwork: { symbol: string | null; name: string };
 };
 
 const symOrName = (s?: string | null, n?: string) => (s && s.trim().length ? s : (n ?? ""));
@@ -29,23 +29,41 @@ export default function NewOrderPage() {
 
   // ====== STATE: PILIHAN PAY (dipisah) ======
   const [payWithSymbol, setPayWithSymbol] = useState("");
-  const [payNetworkSymbol, setPayNetworkSymbol] = useState("");
+  // Disimpan sebagai "key" = symbol jika ada, kalau tidak pakai name.
+  const [payNetworkKey, setPayNetworkKey] = useState("");
 
   // ====== STATE: PILIHAN BUY (difilter oleh rate untuk pay pair) ======
   const [coinToBuySymbol, setCoinToBuySymbol] = useState("");
-  const [buyNetworkSymbol, setBuyNetworkSymbol] = useState("");
+  const [buyNetworkKey, setBuyNetworkKey] = useState("");
 
   // ====== INPUT LAIN ======
   const [amount, setAmount] = useState<string>("");
   const [receivingAddr, setReceivingAddr] = useState("");
   const [receivingMemo, setReceivingMemo] = useState("");
 
-  // ====== UI ======
+  // ====== INFO RATE & ERROR ======
   const [rate, setRate] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // 1) Muat semua payment options publik (aktif)
+  // ====== HELPERS: cari objek network terpilih (pay/buy) dari key ======
+  const selectedPayNetwork = useMemo(() => {
+    // cari dari paymentOptions untuk coin pay yang dipilih
+    const candidates = paymentOptions.filter((po) => po.coin.symbol === payWithSymbol);
+    return candidates
+      .map((po) => po.network)
+      .find((n) => symOrName(n.symbol, n.name) === payNetworkKey) || null;
+  }, [paymentOptions, payWithSymbol, payNetworkKey]);
+
+  const selectedBuyNetwork = useMemo(() => {
+    // cari dari ratesForPayPair untuk coin buy yang dipilih
+    const candidates = ratesForPayPair.filter((r) => r.buyCoin.symbol === coinToBuySymbol);
+    return candidates
+      .map((r) => r.buyNetwork)
+      .find((n) => symOrName(n.symbol, n.name) === buyNetworkKey) || null;
+  }, [ratesForPayPair, coinToBuySymbol, buyNetworkKey]);
+
+  // ====== 1) Muat semua payment options publik (aktif) ======
   useEffect(() => {
     getPublicPaymentOptions().then((rows) => {
       const list = Array.isArray(rows) ? rows : [];
@@ -58,13 +76,14 @@ export default function NewOrderPage() {
     });
   }, []);
 
-  // 2) Daftar network yang tersedia untuk pay coin yang dipilih
+  // ====== 2) Daftar network yang tersedia untuk PAY coin terpilih ======
+  // label: NAME SAJA (sesuai permintaan); value/key: symbol jika ada, jika tidak gunakan name.
   const payNetworkOptions = useMemo(() => {
     const nets = paymentOptions
       .filter((po) => po.coin.symbol === payWithSymbol)
       .map((po) => ({
-        value: symOrName(po.network.symbol, po.network.name),
-        label: po.network.symbol ? `${po.network.symbol} — ${po.network.name}` : po.network.name,
+        value: symOrName(po.network.symbol, po.network.name), // key internal
+        label: po.network.name, // 🔔 tampilkan NAME, bukan symbol
       }));
     // unikkan
     const map = new Map<string, string>();
@@ -72,18 +91,18 @@ export default function NewOrderPage() {
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
   }, [paymentOptions, payWithSymbol]);
 
-  // 3) Pastikan pay network valid saat pay coin berubah
+  // Pastikan PAY network valid saat PAY coin berubah
   useEffect(() => {
     if (!payNetworkOptions.length) {
-      setPayNetworkSymbol("");
+      setPayNetworkKey("");
       return;
     }
-    if (!payNetworkSymbol || !payNetworkOptions.some((o) => o.value === payNetworkSymbol)) {
-      setPayNetworkSymbol(payNetworkOptions[0].value);
+    if (!payNetworkKey || !payNetworkOptions.some((o) => o.value === payNetworkKey)) {
+      setPayNetworkKey(payNetworkOptions[0].value);
     }
-  }, [payNetworkOptions, payNetworkSymbol]);
+  }, [payNetworkOptions, payNetworkKey]);
 
-  // 4) Fetch rates untuk pay pair → tentukan opsi BUY yang valid
+  // ====== 3) Fetch rates untuk PAY pair → tentukan opsi BUY yang valid ======
   useEffect(() => {
     let cancelled = false;
     async function run() {
@@ -91,29 +110,32 @@ export default function NewOrderPage() {
       setRatesForPayPair([]);
       setRate(null);
       setCoinToBuySymbol("");
-      setBuyNetworkSymbol("");
-      if (!payWithSymbol || !payNetworkSymbol) return;
+      setBuyNetworkKey("");
+      const payNetSymbol = selectedPayNetwork?.symbol ?? undefined; // gunakan symbol untuk query
+      if (!payWithSymbol || !payNetSymbol) return;
       try {
         const rows: RateRow[] = await getPublicExchangeRates({
           payCoinSymbol: payWithSymbol,
-          payNetworkSymbol: payNetworkSymbol,
+          payNetworkSymbol: payNetSymbol,
         });
         if (cancelled) return;
         setRatesForPayPair(rows || []);
         if (rows?.length) {
           const first = rows[0];
           setCoinToBuySymbol(first.buyCoin.symbol);
-          setBuyNetworkSymbol(symOrName(first.buyNetwork.symbol, first.buyNetwork.name));
+          setBuyNetworkKey(symOrName(first.buyNetwork.symbol, first.buyNetwork.name));
         }
       } catch (e) {
         if (!cancelled) setRatesForPayPair([]);
       }
     }
     run();
-    return () => { cancelled = true; };
-  }, [payWithSymbol, payNetworkSymbol]);
+    return () => {
+      cancelled = true;
+    };
+  }, [payWithSymbol, selectedPayNetwork?.symbol]); // depend on symbol (bukan key) agar query valid
 
-  // 5) Opsi BUY: coin & network hanya dari ratesForPayPair
+  // ====== 4) Opsi BUY: coin & network hanya dari ratesForPayPair ======
   const buyCoinOptions = useMemo(() => {
     const map = new Map<string, string>(); // symbol -> name
     for (const r of ratesForPayPair) map.set(r.buyCoin.symbol, r.buyCoin.name);
@@ -121,39 +143,41 @@ export default function NewOrderPage() {
   }, [ratesForPayPair]);
 
   const buyNetworkOptions = useMemo(() => {
-    const map = new Map<string, string>(); // value(symOrName) -> label
+    const map = new Map<string, string>(); // key(symOrName) -> NAME (display only)
     for (const r of ratesForPayPair) {
       if (r.buyCoin.symbol !== coinToBuySymbol) continue;
       const key = symOrName(r.buyNetwork.symbol, r.buyNetwork.name);
-      const label = r.buyNetwork.symbol ? `${r.buyNetwork.symbol} — ${r.buyNetwork.name}` : r.buyNetwork.name;
+      const label = r.buyNetwork.name; // 🔔 tampilkan NAME saja
       map.set(key, label);
     }
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
   }, [ratesForPayPair, coinToBuySymbol]);
 
-  // 6) Pastikan buy network valid saat buy coin berubah
+  // Pastikan BUY network valid saat BUY coin berubah
   useEffect(() => {
     if (!buyNetworkOptions.length) {
-      setBuyNetworkSymbol("");
+      setBuyNetworkKey("");
       return;
     }
-    const exists = buyNetworkOptions.some((o) => o.value === buyNetworkSymbol);
-    if (!exists) setBuyNetworkSymbol(buyNetworkOptions[0].value);
-  }, [buyNetworkOptions, buyNetworkSymbol]);
+    const exists = buyNetworkOptions.some((o) => o.value === buyNetworkKey);
+    if (!exists) setBuyNetworkKey(buyNetworkOptions[0].value);
+  }, [buyNetworkOptions, buyNetworkKey]);
 
-  // 7) Rate otomatis ketika BUY & PAY lengkap
+  // ====== 5) Rate otomatis ketika BUY & PAY lengkap ======
   useEffect(() => {
     let cancelled = false;
     async function run() {
       setRate(null);
       setError(null);
-      if (!coinToBuySymbol || !buyNetworkSymbol || !payWithSymbol || !payNetworkSymbol) return;
+      const payNetSymbol = selectedPayNetwork?.symbol ?? undefined;
+      const buyNetSymbol = selectedBuyNetwork?.symbol ?? undefined;
+      if (!coinToBuySymbol || !buyNetSymbol || !payWithSymbol || !payNetSymbol) return;
       try {
         const rows: RateRow[] = await getPublicExchangeRates({
           buyCoinSymbol: coinToBuySymbol,
-          buyNetworkSymbol: buyNetworkSymbol,
+          buyNetworkSymbol: buyNetSymbol,
           payCoinSymbol: payWithSymbol,
-          payNetworkSymbol: payNetworkSymbol,
+          payNetworkSymbol: payNetSymbol,
         });
         if (!cancelled) setRate(rows?.[0]?.rate ?? null);
       } catch {
@@ -161,33 +185,53 @@ export default function NewOrderPage() {
       }
     }
     run();
-    return () => { cancelled = true; };
-  }, [coinToBuySymbol, buyNetworkSymbol, payWithSymbol, payNetworkSymbol]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    coinToBuySymbol,
+    selectedBuyNetwork?.symbol,
+    payWithSymbol,
+    selectedPayNetwork?.symbol,
+  ]);
 
-  // 8) Submit
+  const buyUnavailable =
+    !ratesForPayPair.length ||
+    !buyCoinOptions.length ||
+    !buyNetworkOptions.length ||
+    !coinToBuySymbol ||
+    !buyNetworkKey;
+
+  // ====== 6) Submit ======
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true); setError(null);
+    setBusy(true);
+    setError(null);
     try {
-      if (!payWithSymbol || !payNetworkSymbol) throw new Error("Pilih Bayar Coin & Network");
-      if (!coinToBuySymbol || !buyNetworkSymbol) throw new Error("Pilih Beli Coin & Network");
+      if (!payWithSymbol || !selectedPayNetwork) throw new Error("Pilih Bayar Coin & Network");
+      if (!coinToBuySymbol || !selectedBuyNetwork) throw new Error("Pilih Beli Coin & Network");
       if (!amount || Number(amount) <= 0) throw new Error("Jumlah tidak valid");
+
+      const body = {
+        // PAY
+        payWithSymbol,
+        payNetworkSymbol: selectedPayNetwork.symbol ?? undefined,
+        payNetworkName: selectedPayNetwork.name,
+        // BUY
+        coinToBuySymbol,
+        buyNetworkSymbol: selectedBuyNetwork.symbol ?? undefined,
+        buyNetworkName: selectedBuyNetwork.name,
+        // LAINNYA
+        amount: Number(amount),
+        receivingAddr,
+        receivingMemo: receivingMemo || undefined,
+        expiresInMinutes: 60,
+      };
 
       const res = await fetch("/api/public/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          // PAY pakai symbol
-          payWithSymbol,
-          payNetworkSymbol,
-          // BUY pakai symbol
-          coinToBuySymbol,
-          buyNetworkSymbol,
-          amount: Number(amount),
-          receivingAddr,
-          receivingMemo: receivingMemo || undefined,
-          expiresInMinutes: 60,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Invalid input");
@@ -199,11 +243,13 @@ export default function NewOrderPage() {
     }
   }
 
-  const buyUnavailable = !!payWithSymbol && !!payNetworkSymbol && ratesForPayPair.length === 0;
-
   return (
     <div className="mx-auto max-w-2xl p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Buat Order</h1>
+      <h1 className="text-2xl font-semibold">Buat Order Baru</h1>
+
+      {error && (
+        <div className="bg-red-50 text-red-700 border border-red-200 rounded p-3 text-sm">{error}</div>
+      )}
 
       <form onSubmit={submit} className="space-y-4">
         {/* ==== PAY: DIPISAH ==== */}
@@ -230,23 +276,28 @@ export default function NewOrderPage() {
             <label className="block text-sm mb-1">Bayar Network</label>
             <select
               className="border rounded p-2 w-full"
-              value={payNetworkSymbol}
-              onChange={(e) => setPayNetworkSymbol(e.target.value)}
+              value={payNetworkKey}
+              onChange={(e) => setPayNetworkKey(e.target.value)}
             >
               {payNetworkOptions.length === 0 && <option value="">(Tidak tersedia)</option>}
               {payNetworkOptions.map((n) => (
-                <option key={n.value} value={n.value}>{n.label}</option>
+                <option key={n.value} value={n.value}>
+                  {/* 🔔 Tampilkan NAME saja */}
+                  {n.label}
+                </option>
               ))}
             </select>
           </div>
         </div>
         <p className="text-xs text-gray-500 -mt-2">
           Hanya network yang tersedia untuk coin tersebut yang ditampilkan.
-          Pilihan <b>Beli Coin</b> & <b>Network Beli</b> di bawah akan otomatis terfilter agar hanya menampilkan kombinasi yang punya rate.
+          Pilihan <b>Beli Coin</b> & <b>Network Beli</b> di bawah akan otomatis terfilter agar hanya yang memiliki
+          rate terhadap pasangan di atas yang muncul.
         </p>
 
-        {/* ==== BUY: FILTERED BY RATES FOR PAY PAIR ==== */}
-        <fieldset disabled={!payWithSymbol || !payNetworkSymbol} className={!payWithSymbol || !payNetworkSymbol ? "opacity-60" : ""}>
+        {/* ==== BUY (TERFILTER DARI RATE PAY PAIR) ==== */}
+        <fieldset className="border rounded p-3">
+          <legend className="text-sm px-1">Beli</legend>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm mb-1">Beli Coin</label>
@@ -268,12 +319,15 @@ export default function NewOrderPage() {
               <label className="block text-sm mb-1">Network Beli</label>
               <select
                 className="border rounded p-2 w-full"
-                value={buyNetworkSymbol}
-                onChange={(e) => setBuyNetworkSymbol(e.target.value)}
+                value={buyNetworkKey}
+                onChange={(e) => setBuyNetworkKey(e.target.value)}
               >
                 {buyNetworkOptions.length === 0 && <option value="">(Tidak tersedia)</option>}
                 {buyNetworkOptions.map((n) => (
-                  <option key={n.value} value={n.value}>{n.label}</option>
+                  <option key={n.value} value={n.value}>
+                    {/* 🔔 Tampilkan NAME saja */}
+                    {n.label}
+                  </option>
                 ))}
               </select>
             </div>
@@ -298,41 +352,37 @@ export default function NewOrderPage() {
         </div>
 
         {/* ==== RECEIVING ==== */}
-        <div>
-          <label className="block text-sm mb-1">Alamat Menerima</label>
-          <input
-            className="border rounded p-2 w-full"
-            value={receivingAddr}
-            onChange={(e) => setReceivingAddr(e.target.value)}
-            placeholder="alamat kamu"
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Memo (opsional)</label>
-          <input
-            className="border rounded p-2 w-full"
-            value={receivingMemo}
-            onChange={(e) => setReceivingMemo(e.target.value)}
-            placeholder="memo/tag penerima jika ada"
-          />
-        </div>
-
-        {/* ==== STATUS & ACTION ==== */}
-        {buyUnavailable && (
-          <div className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">
-            Tidak ada kombinasi <b>Beli Coin/Network</b> yang memiliki rate untuk metode Bayar ini. Silakan pilih kombinasi Bayar lain.
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm mb-1">Alamat Penerima</label>
+            <input
+              type="text"
+              className="border rounded p-2 w-full"
+              value={receivingAddr}
+              onChange={(e) => setReceivingAddr(e.target.value)}
+              placeholder="0x..., T..., atau sesuai jaringan"
+            />
           </div>
-        )}
-        {error && <div className="text-red-600 text-sm">{error}</div>}
+          <div>
+            <label className="block text-sm mb-1">Memo/Tag (opsional)</label>
+            <input
+              type="text"
+              className="border rounded p-2 w-full"
+              value={receivingMemo}
+              onChange={(e) => setReceivingMemo(e.target.value)}
+              placeholder="XRP tag / EOS memo / TON comment, bila diperlukan"
+            />
+          </div>
+        </div>
 
         <button
           type="submit"
           disabled={
             busy ||
             !payWithSymbol ||
-            !payNetworkSymbol ||
+            !payNetworkKey ||
             !coinToBuySymbol ||
-            !buyNetworkSymbol ||
+            !buyNetworkKey ||
             buyUnavailable
           }
           className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"

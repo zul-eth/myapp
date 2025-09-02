@@ -11,9 +11,9 @@ type RateRow = {
   updatedBy?: string | null;
   updatedAt?: string;
   buyCoin: { id: string; symbol: string };
-  buyNetwork: { id: string; symbol: string };
+  buyNetwork: { id: string; name: string; symbol?: string | null };
   payCoin: { id: string; symbol: string };
-  payNetwork: { id: string; symbol: string };
+  payNetwork: { id: string; name: string; symbol?: string | null };
 };
 
 const empty = {
@@ -88,6 +88,11 @@ export default function AdminExchangeRatesPage() {
     } finally { setLoading(false); }
   };
 
+  // ⬇️ Selalu pakai name untuk network
+  const pairLabel = (coinSym: string, net: { name: string }) => {
+    return `${coinSym.toLowerCase()} ${net.name.toLowerCase()}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -134,7 +139,8 @@ export default function AdminExchangeRatesPage() {
         <table className="min-w-full border rounded">
           <thead>
             <tr className="bg-gray-50 text-left">
-              <th className="p-2 border">Pair</th>
+              <th className="p-2 border">Buy pair</th>
+              <th className="p-2 border">Pay pair</th>
               <th className="p-2 border">Rate</th>
               <th className="p-2 border">Updated By</th>
               <th className="p-2 border">Updated At</th>
@@ -145,7 +151,10 @@ export default function AdminExchangeRatesPage() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td className="p-2 border">
-                  {r.buyCoin.symbol}/{r.payCoin.symbol} · {r.buyNetwork.symbol}/{r.payNetwork.symbol}
+                  {pairLabel(r.buyCoin.symbol, r.buyNetwork)}
+                </td>
+                <td className="p-2 border">
+                  {pairLabel(r.payCoin.symbol, r.payNetwork)}
                 </td>
                 <td className="p-2 border">{r.rate}</td>
                 <td className="p-2 border">{r.updatedBy || "—"}</td>

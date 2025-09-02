@@ -27,3 +27,5 @@ export async function POST(req: Request) {
     return badRequest(e?.message ?? "Gagal membuat relasi");
   }
 }
+
+

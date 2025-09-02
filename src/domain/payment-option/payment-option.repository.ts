@@ -9,18 +9,26 @@ export type CreatePaymentOptionDTO = {
 
 export type UpdatePaymentOptionDTO = Partial<Pick<CreatePaymentOptionDTO, "isActive">>;
 
+/**
+ * Filter untuk mengambil payment options aktif.
+ * Catatan: properti buy* hanya dipakai di SERVICE (interseksi dengan ExchangeRate),
+ * repository ini tetap fokus pada filter pay-side saja.
+ */
 export type PaymentOptionActiveFilter = {
+  // PAY-side filters (sudah ada)
   coinId?: string;
   networkId?: string;
-  coinSymbol?: string;    // akan di-uppercasing di service
-  networkSymbol?: string; // akan di-uppercasing di service
+  coinSymbol?: string;
+  networkSymbol?: string;
+
+  // BUY-side filters (baru; dipakai di service)
+  buyCoinId?: string;
+  buyNetworkId?: string;
+  buyCoinSymbol?: string;
+  buyNetworkSymbol?: string;
 };
 
-export class PaymentOptionRepositoryPrisma extends BaseRepository<typeof prisma.paymentOption> {
-  constructor() {
-    super(prisma.paymentOption);
-  }
-
+export class PaymentOptionRepositoryPrisma extends BaseRepository {
   listAll() {
     return prisma.paymentOption.findMany({
       orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],

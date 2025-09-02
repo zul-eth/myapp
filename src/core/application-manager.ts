@@ -25,6 +25,10 @@ import { OrderRepositoryPrisma } from "@/domain/order/order.repository";
 import { OrderService } from "@/domain/order/order.service";
 import { OrderController } from "@/domain/order/order.controller";
 
+import { PayoutService } from "@/domain/payout/payout.service";
+import { PayoutController } from "@/domain/payout/payout.controller";
+
+
 export class ApplicationManager {
   coin: any;
   network: any;
@@ -33,6 +37,7 @@ export class ApplicationManager {
   wallet: any;
   exchangeRate: any;
   order: any;
+  payout!: { service: PayoutService; controller: PayoutController };
 
   constructor() {
     const coinRepo = new CoinRepositoryPrisma();
@@ -68,5 +73,9 @@ export class ApplicationManager {
     const orderService = new OrderService(orderRepo, rateService, walletService);
     const orderController = new OrderController(orderService);
     this.order = { repository: orderRepo, service: orderService, controller: orderController };
+    
+    const payoutService = new PayoutService();
+    const payoutController = new PayoutController(payoutService);
+    this.payout = { service: payoutService, controller: payoutController };
   }
 }

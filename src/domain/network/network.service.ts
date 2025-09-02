@@ -1,7 +1,7 @@
 import { NetworkRepositoryPrisma, CreateNetworkDTO, UpdateNetworkDTO } from "./network.repository";
-const SYMBOL_RE = /^[A-Z0-9_-]{2,20}$/;
 
-const normalize = (s: string) => s.trim().toUpperCase();
+const SYMBOL_RE = /^[A-Z0-9._-]{2,32}$/;
+const normalizeSymbol = (s: string) => s.trim().replace(/\s+/g, "_").toUpperCase();
 
 export class NetworkService {
   constructor(private readonly repo: NetworkRepositoryPrisma) {}
@@ -14,40 +14,43 @@ export class NetworkService {
   }
 
   async create(input: CreateNetworkDTO) {
-    const data = { ...input, symbol: normalize(input.symbol) };
-    if (!SYMBOL_RE.test(data.symbol)) throw new Error("Format symbol tidak valid");
-    const exists = await this.repo.findBySymbol(data.symbol);
-    if (exists) throw new Error(`Network dengan symbol ${data.symbol} sudah ada`);
+    const data = { ...input, symbol: normalizeSymbol(input.symbol), name: input.name.trim() };
+
+    // ✅ symbol boleh duplikat (hanya validasi format)
+    if (!SYMBOL_RE.test(data.symbol)) throw new Error("Format symbol tidak valid (2–32, A-Z/0-9/_/./-)");
+
+    // ✅ yang unik adalah NAME
+    const byName = await this.repo.findByName(data.name);
+    if (byName) throw new Error(`Network dengan name '${data.name}' sudah ada`);
+
     try {
       return await this.repo.createNetwork(data);
     } catch (e: any) {
-      if (e.code === "P2002") throw new Error(`Network dengan symbol ${data.symbol} sudah ada`);
+      // Prisma juga akan menjaga name unik di level DB
+      if (e.code === "P2002") throw new Error(`Network dengan name '${data.name}' sudah ada`);
       throw e;
     }
   }
 
   async update(id: string, input: UpdateNetworkDTO) {
-    const data = { ...input };
+    const data: UpdateNetworkDTO = { ...input };
+
     if (data.symbol !== undefined) {
-      data.symbol = normalize(data.symbol);
+      data.symbol = normalizeSymbol(data.symbol);
       if (!SYMBOL_RE.test(data.symbol)) throw new Error("Format symbol tidak valid");
-      const other = await this.repo.findBySymbol(data.symbol);
-      if (other && other.id !== id) throw new Error(`Network dengan symbol ${data.symbol} sudah ada`);
     }
+
+    if (data.name !== undefined) {
+      data.name = data.name.trim();
+      const byName = await this.repo.findByName(data.name);
+      if (byName && byName.id !== id) throw new Error(`Network dengan name '${data.name}' sudah ada`);
+    }
+
     try {
       return await this.repo.updateNetwork(id, data);
     } catch (e: any) {
       if (e.code === "P2025") throw new Error("Network tidak ditemukan");
-      if (e.code === "P2002") throw new Error(`Network dengan symbol ${data.symbol} sudah ada`);
-      throw e;
-    }
-  }
-
-  async toggleActive(id: string, isActive: boolean) {
-    try {
-      return await this.repo.toggleActive(id, isActive);
-    } catch (e: any) {
-      if (e.code === "P2025") throw new Error("Network tidak ditemukan");
+      if (e.code === "P2002") throw new Error("Name sudah digunakan");
       throw e;
     }
   }

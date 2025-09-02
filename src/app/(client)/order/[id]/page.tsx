@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
+import { useParams } from "next/navigation";
 // ==== Types yang cukup longgar (agar tahan perubahan API) ====
 type Maybe<T> = T | null | undefined;
 type OrderView = {
@@ -100,7 +100,7 @@ function statusColor(s: OrderView["status"]) {
 }
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+  const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<OrderView | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

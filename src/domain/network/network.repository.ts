@@ -5,7 +5,7 @@ import type { ChainFamily } from "@prisma/client";
 export type CreateNetworkDTO = {
   symbol: string;
   name: string;
-  family: ChainFamily; // ganti ke 'chainFamily' jika skema kamu pakai nama ini
+  family: ChainFamily;
   isActive?: boolean;
 };
 export type UpdateNetworkDTO = Partial<CreateNetworkDTO>;
@@ -30,8 +30,14 @@ export class NetworkRepositoryPrisma extends BaseRepository<typeof prisma.networ
     return prisma.network.findUnique({ where: { id } });
   }
 
+  // NOTE: name unik → aman pakai findUnique
+  findByName(name: string) {
+    return prisma.network.findUnique({ where: { name } });
+  }
+
+  // symbol TIDAK unik → pakai findFirst jika masih dibutuhkan
   findBySymbol(symbol: string) {
-    return prisma.network.findUnique({ where: { symbol } });
+    return prisma.network.findFirst({ where: { symbol } });
   }
 
   createNetwork(data: CreateNetworkDTO) {
@@ -39,7 +45,7 @@ export class NetworkRepositoryPrisma extends BaseRepository<typeof prisma.networ
       data: {
         symbol: data.symbol,
         name: data.name,
-        family: data.family,      // ganti ke 'chainFamily' jika perlu
+        family: data.family,
         isActive: data.isActive ?? true,
       } as any,
     });
@@ -49,7 +55,7 @@ export class NetworkRepositoryPrisma extends BaseRepository<typeof prisma.networ
     const patch: any = {};
     if (data.symbol !== undefined) patch.symbol = data.symbol;
     if (data.name !== undefined) patch.name = data.name;
-    if (data.family !== undefined) patch.family = data.family; // atau chainFamily
+    if (data.family !== undefined) patch.family = data.family;
     if (data.isActive !== undefined) patch.isActive = data.isActive;
 
     return prisma.network.update({
@@ -58,35 +64,13 @@ export class NetworkRepositoryPrisma extends BaseRepository<typeof prisma.networ
     });
   }
 
-  toggleActive(id: string, isActive: boolean) {
-    return prisma.network.update({
-      where: { id },
-      data: { isActive },
-    });
-  }
-
-  /**
-   * Hapus network + relasi dependent:
-   * - PaymentOption, CoinNetwork
-   * - Payment, Order (buyNetworkId/payNetworkId)
-   * - ExchangeRate (buyNetworkId/payNetworkId)
-   */
   async deleteNetworkCascade(id: string) {
     return prisma.$transaction(async (tx) => {
-      await tx.payment.deleteMany({ where: { networkId: id } });
-      await tx.paymentOption.deleteMany({ where: { networkId: id } });
       await tx.coinNetwork.deleteMany({ where: { networkId: id } });
-
-      await tx.order.deleteMany({
-        where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] },
-      });
-
-      await tx.exchangeRate.deleteMany({
-        where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] },
-      });
-
+      await tx.paymentOption.deleteMany({ where: { networkId: id } });
+      await tx.order.deleteMany({ where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] } });
+      await tx.exchangeRate.deleteMany({ where: { OR: [{ buyNetworkId: id }, { payNetworkId: id }] } });
       await tx.network.delete({ where: { id } });
-
       return { success: true, type: "hard-delete", message: "Network dihapus permanen" };
     });
   }

@@ -185,7 +185,7 @@ export default function AdminCoinNetworksPage() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td className="p-2 border">{r.coin.symbol}</td>
-                <td className="p-2 border">{r.network.symbol}</td>
+                <td className="p-2 border">{r.network.name}</td>
                 <td className="p-2 border">{r.assetType}</td>
                 <td className="p-2 border">{r.contractAddress || "—"}</td>
                 <td className="p-2 border">{r.decimals ?? "—"}</td>
