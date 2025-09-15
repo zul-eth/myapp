@@ -1,0 +1,25 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ENV = void 0;
+require("server-only");
+function assertEnv() {
+    var _a;
+    var env = {
+        MNEMONIC: (_a = process.env.MNEMONIC) !== null && _a !== void 0 ? _a : '',
+        RPC_BASE_SEPOLIA: process.env.RPC_BASE_SEPOLIA,
+        BASE_SEPOLIA_PRIVATE_KEY: process.env.BASE_SEPOLIA_PRIVATE_KEY,
+        RPC_ETH_SEPOLIA: process.env.RPC_ETH_SEPOLIA,
+        ETH_SEPOLIA_PRIVATE_KEY: process.env.ETH_SEPOLIA_PRIVATE_KEY,
+        RPC_ARB_SEPOLIA: process.env.RPC_ARB_SEPOLIA,
+        ARB_SEPOLIA_PRIVATE_KEY: process.env.ARB_SEPOLIA_PRIVATE_KEY,
+    };
+    var issues = [];
+    if (!env.MNEMONIC || env.MNEMONIC.trim().split(/\s+/).length < 12) {
+        issues.push('MNEMONIC tidak valid (kurang dari 12 kata?)');
+    }
+    if (issues.length) {
+        throw new Error("ENV tidak lengkap/valid: ".concat(issues.join(', ')));
+    }
+    return env;
+}
+exports.ENV = assertEnv();

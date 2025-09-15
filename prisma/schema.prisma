@@ -117,14 +117,14 @@ model PaymentOption {
 
 model HdCursor {
   id        String   @id @default(uuid())
-  chain     String   @unique // 'evm' | 'tron' | 'solana'
+  chain     String   @unique
   nextIndex Int      @default(0)
   updatedAt DateTime @updatedAt
 }
 
 model WalletPoolLegacy {
   id              String @id @default(uuid())
-  chain           String // 'evm' | 'tron' | 'solana'
+  chain           String
   derivationIndex Int
   address         String @unique
 
@@ -186,7 +186,7 @@ model ExchangeRate {
   payNetwork Network @relation("PayRateNetwork", fields: [payNetworkId], references: [id])
 
   rate      Float
-  updatedBy String? // bisa email/nama admin yang mengubah
+  updatedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -194,12 +194,12 @@ model ExchangeRate {
 }
 
 enum OrderStatus {
-  PENDING // Order baru dibuat
-  WAITING_PAYMENT // Menunggu pembayaran (belum ada pembayaran)
-  UNDERPAID // Sudah ada pembayaran, tapi kurang dari total
-  WAITING_CONFIRMATION // Pembayaran diterima, menunggu konfirmasi jaringan
-  CONFIRMED // Pembayaran terkonfirmasi penuh
-  COMPLETED // Order berhasil dan selesai
-  EXPIRED // Melewati batas waktu, tidak dibayar atau masih kurang
-  FAILED // Order gagal karena alasan lain
+  PENDING
+  WAITING_PAYMENT
+  UNDERPAID
+  WAITING_CONFIRMATION
+  CONFIRMED
+  COMPLETED
+  EXPIRED
+  FAILED
 }
